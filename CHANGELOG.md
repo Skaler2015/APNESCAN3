@@ -34,11 +34,11 @@ Changes in 8.2.1:
 - Sdk: Fixed extraneous error log
 
 Changes in 8.2.0:
-- NAPS2 is [now available](https://apps.microsoft.com/detail/9N3QQ9W0B23Q?cid=changelog) on the Microsoft Store
+- ApneScan is [now available](https://apps.microsoft.com/detail/9N3QQ9W0B23Q?cid=changelog) on the Microsoft Store
   - It costs a small fee to support the developer and provide automatic updates
-  - NAPS2 will continue to be freely available at www.naps2.com
+  - ApneScan will continue to be freely available at www.apnescan.com
 - Added "Edit with" under the "Image" menu for using an external image editor
-- Added "Share even when NAPS2 is closed" option for Scanner Sharing
+- Added "Share even when ApneScan is closed" option for Scanner Sharing
   - This will show a system tray icon and restart on login
 - Imported file names are now used as the default file name when saving
 - The "Apply to all selected" checkbox now stays checked
@@ -54,7 +54,7 @@ Changes in 8.2.0:
 Changes in 8.1.4:
 - Windows: Added a "Theme" setting to switch between Light and Dark mode
 - Linux: Fixed OCR on older Linux versions (e.g. Ubuntu 20.04)
-  - Ubuntu 18.04 is no longer supported (use NAPS2 7.5.3 if needed)
+  - Ubuntu 18.04 is no longer supported (use ApneScan 7.5.3 if needed)
 
 Changes in 8.1.3:
 - Twain: Fixed issues with Kyocera Ecosys scanners
@@ -96,11 +96,11 @@ Changes in 8.0b2:
 - Linux flatpak runtime has been upgraded to 24.08
 
 Changes in 8.0b1:
-- [Beta feedback thread](https://github.com/cyanfish/naps2/discussions/467)
+- [Beta feedback thread](https://github.com/cyanfish/apnescan/discussions/467)
 - Added a scanning sidebar
     - Quickly change basic profile settings
     - Click the icon in the bottom-left (top-left on Mac) to open/close
-    - Admins can set [HideSidebar](https://www.naps2.com/doc/org-use#hide-sidebar) to remove it entirely
+    - Admins can set [HideSidebar](https://www.apnescan.com/doc/org-use#hide-sidebar) to remove it entirely
 - Changed system requirements
     - Windows 7, 8 and 8.1 are no longer supported
     - Windows 32-bit is no longer supported 
@@ -120,11 +120,11 @@ Changes in 7.5.3:
 - Linux: Fixed compatibility with Fedora 41 and others
 
 Changes in 7.5.2:
-- ~~NAPS2 is now available on the Microsoft Store & the Mac App Store~~
+- ~~ApneScan is now available on the Microsoft Store & the Mac App Store~~
   - ~~It costs a small fee to support the developer and provide automatic updates~~
-  - ~~NAPS2 will continue to be freely available at www.naps2.com~~
+  - ~~ApneScan will continue to be freely available at www.apnescan.com~~
 - Windows: Installers and executables are now EV code-signed
-- Fixed NAPS2.Console issues with cancellation
+- Fixed ApneScan.Console issues with cancellation
 - Fixed ESCL compatibility with AirSane
 - Fixed an issue with Apple Driver and out-of-order pages
 - Fixed auto save file prompts to cancel correctly
@@ -164,8 +164,8 @@ Changes in 7.4.1:
   - "Flip duplexed pages" &rarr; "Flip back sides of duplex pages"
 - Added HTTPS support for scanner sharing
   - Uses an auto-generated self-signed certificate by default
-  - Admins can set [EsclServerCertificatePath](https://www.naps2.com/doc/org-use#escl-server-certificate-path) to use a custom certificate
-  - Admins can set [EsclSecurityPolicy](https://www.naps2.com/doc/org-use#escl-security-policy) to force servers/clients to only use HTTPS
+  - Admins can set [EsclServerCertificatePath](https://www.apnescan.com/doc/org-use#escl-server-certificate-path) to use a custom certificate
+  - Admins can set [EsclSecurityPolicy](https://www.apnescan.com/doc/org-use#escl-security-policy) to force servers/clients to only use HTTPS
     - This affects all ESCL devices, not just shared scanners
 - Improved ESCL reliability with network interruptions
 - Fixed some issues with Preview window zooming
@@ -208,9 +208,9 @@ Changes in 7.3.0:
   - Save button default action
   - Clear images after saving
   - Keep images across sessions
-  - Only allow a single NAPS2 instance
+  - Only allow a single ApneScan instance
 - Added corresponding appsettings.xml options
-  - See https://www.naps2.com/doc/org-use
+  - See https://www.apnescan.com/doc/org-use
 - Added "mode" attribute to some settings in appsettings.xml:
   - mode="default" provides a default value for the user
   - mode="lock" prevents the user from changing the value
@@ -219,7 +219,7 @@ Changes in 7.3.0:
   - "--listdevices" to see available scanning devices
   - "--driver", "--device", "--source", "--pagesize", "--dpi", "--bitdepth" scanning options
   - "--deskew", "--rotate" post-processing options
-  - See https://www.naps2.com/doc/command-line
+  - See https://www.apnescan.com/doc/command-line
 - Windows: Updated .exe installer style
 - Windows: Added back "Alt" hotkeys
 - Windows: Fixed an issue sending email with Outlook 2010-2016
@@ -239,8 +239,8 @@ Changes in 7.2.0:
     - Set up a Raspberry Pi to turn a USB scanner into a wireless scanner
   - On the host computer, in the Profiles window, click Scanner Sharing and choose the scanners to share
   - On the client computer, select "ESCL Driver" in your profile settings and you should be able to select the shared scanner
-  - NAPS2 currently must be kept open on the host for sharing to work
-  - Shared scanners can be used from any ESCL-capable client, not just NAPS2
+  - ApneScan currently must be kept open on the host for sharing to work
+  - Shared scanners can be used from any ESCL-capable client, not just ApneScan
     - Try [Mopria Scan](https://play.google.com/store/apps/details?id=org.mopria.scan.application) for Android
   - Use NoScannerSharing in appsettings.xml to disable
 - Slightly updated icons in the Profiles window 
@@ -262,7 +262,7 @@ Changes in 7.1.0:
 - Imported PDFs now render forms and annotations 
 - Added Hindi language 
 - Bug fixes
-- NAPS2.Sdk is now available on [Nuget](https://www.nuget.org/packages/NAPS2.Sdk)
+- ApneScan.Sdk is now available on [Nuget](https://www.nuget.org/packages/ApneScan.Sdk)
 
 Changes in 7.0b9:
 - Improved accuracy of PDF page sizes
@@ -284,12 +284,12 @@ Changes in 7.0b8:
 - Linux: Improved compatibility with older Linux (e.g. Ubuntu 18.04)
 - Linux: Added dependencies to .deb package  
 - Sane: Show IP addresses for escl/airscan backends
-- Windows: Changed installer publisher to "NAPS2 Software"
+- Windows: Changed installer publisher to "ApneScan Software"
 - Improved error log formatting
 - Added debug logging for scanning diagnostics
   - Turn on by checking "Enable debug logging" in the About window
   - This will record information about scanning activity on disk
-  - You can find debuglog.txt in the [same folder](https://www.naps2.com/doc/troubleshooting#error-log) as errorlog.txt
+  - You can find debuglog.txt in the [same folder](https://www.apnescan.com/doc/troubleshooting#error-log) as errorlog.txt
   - Use NoDebugLogging in appsettings.xml to hide the option
 - Added Bosnian and Indonesian languages
 - Bug fixes
@@ -305,7 +305,7 @@ Changes in 7.0b5:
 - Linux: Added .deb/.rpm packages
 - Sane: Show devices incrementally (only with Mac / Linux flatpak)
 - Crop improvements
-- Fixed formatting for OCR of non-NAPS2 PDFs
+- Fixed formatting for OCR of non-ApneScan PDFs
 - Bug fixes
 
 Changes in 7.0b4:
@@ -322,12 +322,12 @@ Changes in 7.0b2:
 - Bug fixes
 
 Changes in 7.0b1:
-- Most NAPS2 code has been rewritten. Things should mostly look the same but under the hood there are many differences.
-    - [Beta feedback thread](https://github.com/cyanfish/naps2/discussions/35)
+- Most ApneScan code has been rewritten. Things should mostly look the same but under the hood there are many differences.
+    - [Beta feedback thread](https://github.com/cyanfish/apnescan/discussions/35)
 - Added Mac support
     - Supports macOS 10.15 and later
     - The Universal download should work for all users. Or you can use the Intel/Apple Silicon downloads for a smaller download/install size if you know which one your Mac has.
-    - NAPS2 on Mac bundles SANE drivers for USB scanners, allowing supported scanners to be used even on new M1/M2 Macs (which normally wouldn't work without manufacturer-provided drivers)
+    - ApneScan on Mac bundles SANE drivers for USB scanners, allowing supported scanners to be used even on new M1/M2 Macs (which normally wouldn't work without manufacturer-provided drivers)
 - Added native Linux support
     - Requires Flatpak for installation (https://flatpak.org/setup/)
     - Mono is no longer required
@@ -335,16 +335,16 @@ Changes in 7.0b1:
     - Much better performance and reliability
 - TWAIN support has been reworked
     - Some lifecycle-related issues should hopefully be fixed (e.g. only being able to scan once)
-    - With "Use predefined settings", TWAIN now uses the built-in NAPS2 progress window, which allows multitasking
+    - With "Use predefined settings", TWAIN now uses the built-in ApneScan progress window, which allows multitasking
     - TWAIN UI should no longer be visible in console and batch mode
     - TWAIN should also now support scanning larger images (e.g. 1200dpi) without out-of-memory issues
 - Upgraded Tesseract to 5.2.0 for OCR
     - Up to 30% faster OCR performance
-    - Tesseract is now bundled with the NAPS2 download, so no extra download is required (though you still need to download language data if you don't already have it).
+    - Tesseract is now bundled with the ApneScan download, so no extra download is required (though you still need to download language data if you don't already have it).
 - PDF import and export have been rewritten to leverage Pdfium
     - This means better support for importing different kinds of PDFs
     - In some cases this means much faster import/export
-    - Pdfium is bundled with the NAPS2 download so there is no longer an extra download needed to import non-NAPS2 PDFs
+    - Pdfium is bundled with the ApneScan download so there is no longer an extra download needed to import non-ApneScan PDFs
 - New Crop UI
 - Minor tweaks to blank page detection
 - Image list tweaks
@@ -357,7 +357,7 @@ Changes in 7.0b1:
 - JPEG2000 support for importing/saving images (Mac only for now)
 - Dropped support for rarely-used image file formats (.emf, .exif, .gif)
     - Please request if you want this back
-- NAPS2 on Windows now requires .NET Framework 4.6.2
+- ApneScan on Windows now requires .NET Framework 4.6.2
     - This means no more support for Windows XP
     - Windows 7 SP1 is now the minimum requirement
 - The 64-bit Windows install location is now "Program Files" instead of "Program Files (x86)"
@@ -365,12 +365,12 @@ Changes in 7.0b1:
 - The AppData format for config.xml and Tesseract files has changed (will be automatically migrated)
 - Improved icon quality
 - Translations have been moved to Crowdin
-    - See [translate.naps2.com](https://translate.naps2.com)
+    - See [translate.apnescan.com](https://translate.apnescan.com)
 - Various performance and reliability improvements
 - Bug fixes
 
 Changes in 6.1.2:
-- Added --autosend support for Gmail in NAPS2.Console
+- Added --autosend support for Gmail in ApneScan.Console
 - Bug fixes
 
 Changes in 6.1.1:
@@ -385,7 +385,7 @@ Changes in 6.1.0:
 - Bug fixes
 
 Changes in 6.0b4:
-- Beta feedback thread: https://sourceforge.net/p/naps2/discussion/general/thread/8776c818/
+- Beta feedback thread: https://sourceforge.net/p/apnescan/discussion/general/thread/8776c818/
 - Upgraded WIA version from 1.0 to 2.0; can be changed back in your profile under Advanced
 - Improved WIA compatibility with feeders and duplex
 - Added support for background scanning with WIA
@@ -395,23 +395,23 @@ Changes in 6.0b4:
 - Bug fixes
 
 Changes in 6.0b3:
-- Beta feedback thread: https://sourceforge.net/p/naps2/discussion/general/thread/8776c818/
+- Beta feedback thread: https://sourceforge.net/p/apnescan/discussion/general/thread/8776c818/
 - Added optional event logging
-    - See https://www.naps2.com/doc-org-use.html#event-logging
+    - See https://www.apnescan.com/doc-org-use.html#event-logging
 - Improved console import speed
 - Bug fixes
 
 Changes in 6.0b2:
-- Beta feedback thread: https://sourceforge.net/p/naps2/discussion/general/thread/8776c818/
+- Beta feedback thread: https://sourceforge.net/p/apnescan/discussion/general/thread/8776c818/
 - OCR users from 6.0b1 will need to click the OCR button and re-download
 - Fixed an issue with OCR missing a DLL on some systems
 - Fixed an issue with OCR not terminating
 - Other minor fixes and improvements
 
 Changes in 6.0b1:
-- Beta feedback thread: https://sourceforge.net/p/naps2/discussion/general/thread/8776c818/
+- Beta feedback thread: https://sourceforge.net/p/apnescan/discussion/general/thread/8776c818/
 - Linux support (download one of the portable archives - currently experimental, please give feedback!)
-    - Requires Mono (5.17+ preferably), see https://www.naps2.com/doc-getting-started.html#system-requirements
+    - Requires Mono (5.17+ preferably), see https://www.apnescan.com/doc-getting-started.html#system-requirements
 - Added an automatic update check
     - Opt in from the About window
     - Not available if installed from the MSI
@@ -429,12 +429,12 @@ Changes in 6.0b1:
 - Improved performance with very large images
 - Substantially reduced installation footprint and portable zip size
 - Minimized TWAIN UI in console and batch mode
-- NAPS2 installers are now signed
+- ApneScan installers are now signed
     - This should eventually help remove SmartScreen notifications
-- NAPS2 will now run in 64-bit mode on compatible systems
-    - If you have a 64-bit system, NAPS2 will better handle memory-intensive operations
+- ApneScan will now run in 64-bit mode on compatible systems
+    - If you have a 64-bit system, ApneScan will better handle memory-intensive operations
     - If you downloaded the add-on to open any PDF (gsdll32.dll), you may need to re-download the 64-bit version
-- Improved documentation and usability for developers (see https://www.naps2.com/doc-dev-onboarding.html)
+- Improved documentation and usability for developers (see https://www.apnescan.com/doc-dev-onboarding.html)
 - Bug fixes
 
 Changes in 5.8.2:
@@ -449,25 +449,25 @@ Changes in 5.8.0:
 - PDF/A support
     - PDF/A1-b, PDF/A2-b, PDF/A3-b, and PDF/A3-u support
     - In the "Save PDF" menu, click "PDF Settings", and select it under "Compatibility"
-    - Use --pdfcompat in NAPS2.Console. See www.naps2.com/doc-command-line.html#pdf-options
-    - Use ForcePdfCompat in appsettings.xml. See www.naps2.com/doc-org-use.html#force-pdf-compat
+    - Use --pdfcompat in ApneScan.Console. See www.apnescan.com/doc-command-line.html#pdf-options
+    - Use ForcePdfCompat in appsettings.xml. See www.apnescan.com/doc-org-use.html#force-pdf-compat
 - TIFF changes
     - Better compression for black and white TIFF files by default
     - Added a "Compression" option under Image Settings
     - Added a "Single page files" option under Image Settings that prevents saving multi-page TIFF files
-    - Use --tiffcomp and --split in NAPS2.Console. See www.naps2.com/doc-command-line.html#image-options
+    - Use --tiffcomp and --split in ApneScan.Console. See www.apnescan.com/doc-command-line.html#image-options
 - Donate button
     - The About window now has a Donate button
     - An unobtrusive donation prompt is shown after a month of use
-    - Use HideDonateButton in appsettings.xml to disable both. See www.naps2.com/doc-org-use.html#hide-donate-button
+    - Use HideDonateButton in appsettings.xml to disable both. See www.apnescan.com/doc-org-use.html#hide-donate-button
     - The prompt is disabled by default in the MSI distribution
 - Added multi-language support to the EXE installation wizard
 
 Changes in 5.7.1:
-- Added --split, --splitscans, --splitpatcht, and --splitsize options to NAPS2.Console
-    - See www.naps2.com/doc-command-line.html#split-options
-- Added slice support to --import in NAPS2.Console
-    - See www.naps2.com/doc-command-line.html#slicing-imported-files
+- Added --split, --splitscans, --splitpatcht, and --splitsize options to ApneScan.Console
+    - See www.apnescan.com/doc-command-line.html#split-options
+- Added slice support to --import in ApneScan.Console
+    - See www.apnescan.com/doc-command-line.html#slicing-imported-files
 
 Changes in 5.7.0:
 - Fixed downloads for OCR (etc.)
@@ -496,7 +496,7 @@ Changes in 5.6.0:
 
 Changes in 5.5.0:
 - Added support for importing any PDF (requires an additional download, can be disabled by NoUpdatePrompt or DisableGenericPdfImport in appsettings.xml)
-- Added the ability to install optional components using NAPS2.Console (with the "--install" argument)
+- Added the ability to install optional components using ApneScan.Console (with the "--install" argument)
 - Added "Alternative Transfer" TWAIN compatibility option
 - Added .txt extension to license/contributor file names
 - Bug fixes
@@ -554,7 +554,7 @@ Changes in 5.1.0:
 - Added a "Restore Defaults" button to Advanced Profile Settings
 - Added a "ComponentsPath" option to appsettings.xml
 - Added a "SingleInstance" option to appsettings.xml
-- Placeholders can now be used in --subject and --body arguments in NAPS2.Console
+- Placeholders can now be used in --subject and --body arguments in ApneScan.Console
 - Bug fixes
 
 Changes in 5.0b3:
@@ -576,7 +576,7 @@ Changes in 5.0b1:
 - Changed the default Horizontal Align in profile settings from Left to Right to match most scanners
     - If you deploy your own appsettings.xml the specified alignment specified will continue to be used as default
 - Added a "LockSystemProfiles" flag to appsettings.xml that allows an administrator better control over user profiles
-    - See www.naps2.com/doc-org-use.html#lock-system-profiles
+    - See www.apnescan.com/doc-org-use.html#lock-system-profiles
 - Added an "Offset width based on alignment (WIA)" compatibility option (for ticket #124)
 - Added Farsi and Korean languages to installers
 
@@ -588,7 +588,7 @@ Changes in 4.7.1:
 - Fixed a WIA issue
 
 Changes in 4.7.0:
-- Added option in NAPS2.Console to use auto-save settings (-a/--autosave)
+- Added option in ApneScan.Console to use auto-save settings (-a/--autosave)
 - Added click-and-drag scrolling in the preview window
 - Improved cropping (can now click and drag to select an area)
 - Added more descriptive error messages for some WIA errors (e.g. device busy)
@@ -602,7 +602,7 @@ Changes in 4.6.1:
 
 Changes in 4.6.0:
 - New feature: Exclude blank pages (under "Advanced" in profile settings)
-- New options in NAPS2.Console for reordering (e.g. interleave)
+- New options in ApneScan.Console for reordering (e.g. interleave)
 - Keyboard shortcuts are now customizable in appsettings.xml (and some more default shortcuts added)
 - Optional file type filters when importing
 - Importing multiple files at once now sorts the files better
@@ -618,14 +618,14 @@ Changes in 4.5.1:
 
 Changes in 4.5.0:
 - New feature: Auto Save - Enable it from the profile editor (can be disabled by organizations in appsettings.xml)
-- New feature: Drag and Drop support (re-order images within NAPS2, import files into NAPS2, or copy images between different instances of NAPS2)
+- New feature: Drag and Drop support (re-order images within ApneScan, import files into ApneScan, or copy images between different instances of ApneScan)
 - New feature: "Advanced" profile options for image quality and scanner compatibility
-- New feature: Copy/Paste within NAPS2 (previously could only copy, not paste)
+- New feature: Copy/Paste within ApneScan (previously could only copy, not paste)
 - New progress dialogs for Import, Save, etc. with cancellation
 - Better contrast implementation
 - Selected images are now kept in view when editing and reordering images
 - The default action when clicking on Save PDF, Save Images, and Email PDF can be configured in appsettings.xml (SaveAll, SaveSelected, or AlwaysPrompt)
-- New command-line options for NAPS2.exe to enable/disable scanning from a physical "Scan" button in portable versions ("/RegisterSti", "/UnregisterSti", and "/Silent")
+- New command-line options for ApneScan.exe to enable/disable scanning from a physical "Scan" button in portable versions ("/RegisterSti", "/UnregisterSti", and "/Silent")
 - Improved TWAIN error logging
 - Bug fixes
 
@@ -634,7 +634,7 @@ Changes in 4.4.1:
 - Bug fixes
 
 Changes in 4.4.0:
-- New feature: NAPS2 can be started and/or instantly scan when you press the physical "Scan" button on your scanner (requires reboot after installation)
+- New feature: ApneScan can be started and/or instantly scan when you press the physical "Scan" button on your scanner (requires reboot after installation)
 - Added "Delete" to the context menu in the main window
 - Fixed file size of black and white images after rotate/crop
 - Fixed cancel in OCR download progress window
@@ -679,13 +679,13 @@ Changes in 4.1.1:
 - Bug fixes
 
 Changes in 4.1.0:
-- Changed the website link in the About window to www.naps2.com
+- Changed the website link in the About window to www.apnescan.com
 - Changed "Substitutions" to "Placeholders" for consistency with other software
 - Bug fixes
 
 Changes in 4.0b3:
 - New feature: Thumbnails can be resized for easier viewing
-- New feature: Substitutions can be used in both the GUI and NAPS2.Console when saving (e.g. "$(YYYY)-$(MM)-$(DD) $(nn).pdf" to include the date and an incrementing number)
+- New feature: Substitutions can be used in both the GUI and ApneScan.Console when saving (e.g. "$(YYYY)-$(MM)-$(DD) $(nn).pdf" to include the date and an incrementing number)
 - New feature: Image settings (default file name, jpeg quality), and default file name setting in PDF settings
 - Bug fixes
 
@@ -693,7 +693,7 @@ Changes in 4.0b2:
 - New feature: PDF settings (metadata, encryption) and email settings (can change attachment name)
 - Changed format of standalone/portable archives for easier usage
 - Scanning multiple pages with WIA no longer steals focus from other applications
-- Scanning with WIA in NAPS2.Console no longer displays a separate window
+- Scanning with WIA in ApneScan.Console no longer displays a separate window
 - Bug fixes
 
 Changes in 4.0b1:
@@ -701,7 +701,7 @@ Changes in 4.0b1:
 - Merged the previous Scan functionality into the Profiles window
 - New feature: Image Editing - Crop, Brightness, Contrast, Custom Rotation
 - New feature: Enhanced Preview Window - Can now browse through the images one-by-one and also edit them
-- New feature: Print scanned images directly from NAPS2
+- New feature: Print scanned images directly from ApneScan
 - New feature: Prompt when trying to exit with unsaved changes
 - New feature: The file type used when saving images is remembered
 - Added more keyboard shortcuts (Ctrl+S for save all as PDF, Ctrl+O for import, Ctrl+Enter for scan)
@@ -768,16 +768,16 @@ Changes in 2.6.2:
 
 Changes in 2.6.1:
 - Fixed a bug when scanning after clearing previously scanned images
-- Fixed an error in NAPS2.Console's help text
+- Fixed an error in ApneScan.Console's help text
 
 Changes in 2.6:
 - Added Czech, French, and Polish translations
 - Fixed Catalan translation when using EXE installer
 
 Changes in 2.5:
-- Command-line interface (naps2.console.exe) can send emails
+- Command-line interface (apnescan.console.exe) can send emails
 - More windows can be resized, and all windows remember their size and position
-- NAPS2 will offer to recover scanned images if it previously closed unexpectedly
+- ApneScan will offer to recover scanned images if it previously closed unexpectedly
 - Substantially reduced memory usage
 - Added Hebrew and Catalan translations
 - Bug fixes
@@ -802,7 +802,7 @@ Changes in 2.1:
 
 Changes in 2.0:
 - Major bug fixes for TWAIN on x64 and native WIA
-- Added command-line interface (naps2.console.exe)
+- Added command-line interface (apnescan.console.exe)
 - Added logging capabilities for error reporting
 - Changed .NET dependency from 3.5 Client Profile to 4.0 Client Profile
 

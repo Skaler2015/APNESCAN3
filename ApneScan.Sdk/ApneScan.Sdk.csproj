@@ -1,0 +1,106 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8;net10.0;net462</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+      $(TargetFrameworks);net10.0-macos
+    </TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>ApneScan</RootNamespace>
+
+    <Configurations>Debug;Release;DebugLang;DebugNoMac</Configurations>
+
+    <Title>ApneScan.Sdk</Title>
+    <Product>ApneScan.Sdk</Product>
+    <Description>ApneScan.Sdk is a fully-featured scanning library, supporting WIA, TWAIN, SANE, and ESCL scanners on Windows, Mac, and Linux.</Description>
+    <PackageTags>apnescan sdk scanner wia twain sane escl</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+  <Import Project="..\ApneScan.Setup\targets\SdkUsers.targets" />
+  <Import Project="..\ApneScan.Setup\targets\SdkPackageTargets.targets" />
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
+    <DefineConstants>MAC</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(AddDebugConstant)' == '1' or '$(Configuration)' == 'DebugLang' or '$(Configuration)' == 'DebugNoMac'">
+    <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Grpc.Tools" Version="2.83.0-pre1" PrivateAssets="all" />
+    <PackageReference Include="GrpcDotNetNamedPipes" Version="3.1.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="ApneScan.NTwain" Version="1.0.1" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
+    <PackageReference Include="ApneScan.PdfSharp" Version="1.0.1" />
+    <PackageReference Include="ApneScan.Wia" Version="2.0.3" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="SixLabors.Fonts" Version="1.0.1" />
+    <PackageReference Include="System.Collections.Immutable" Version="10.0.10" />
+    <PackageReference Include="System.Resources.Extensions" Version="10.0.10" />
+    <PackageReference Include="System.Threading.Tasks.Dataflow" Version="10.0.10" />
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Sdk.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib.WinForms</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib.Mac</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib.Gtk</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.App.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Worker</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+    </AssemblyAttribute>
+    
+    <Protobuf Include="**/*.proto" Access="Internal" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\ApneScan.Escl\ApneScan.Escl.csproj" />
+    <ProjectReference Include="..\ApneScan.Images.Mac\ApneScan.Images.Mac.csproj" Condition="'$(TargetFramework)' == 'net10.0-macos'" />
+    <ProjectReference Include="..\ApneScan.Images\ApneScan.Images.csproj" />
+    <ProjectReference Include="..\ApneScan.Internals\ApneScan.Internals.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+
+    <EmbeddedResource Remove="Lang\Resources\SdkResources.*.resx" Condition="'$(Configuration)' == 'Debug'" />
+    <EmbeddedResource Include="Lang\Resources\SdkResources.fr.resx" Condition="'$(Configuration)' == 'Debug'" />
+    <EmbeddedResource Include="Lang\Resources\SdkResources.he.resx" Condition="'$(Configuration)' == 'Debug'" />
+    <EmbeddedResource Include="Lang\Resources\SdkResources.pt-BR.resx" Condition="'$(Configuration)' == 'Debug'" />
+    <EmbeddedResource Update="Lang\Resources\SdkResources.*.resx">
+      <DependentUpon>SdkResources.resx</DependentUpon>
+    </EmbeddedResource>
+
+    <EmbeddedResource Update="**/*.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+
+  </ItemGroup>
+  
+</Project>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8;net10.0;net462;netstandard2.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>14</LangVersion>
+
+        <Title>ApneScan.Escl.Server</Title>
+        <Product>ApneScan.Escl.Server</Product>
+        <Description>ESCL server for ApneScan.Sdk.</Description>
+        <PackageTags>apnescan escl</PackageTags>
+    </PropertyGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\SdkPackageTargets.targets" />
+
+    <ItemGroup>
+      <PackageReference Include="EmbedIO" Version="3.5.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\ApneScan.Escl\ApneScan.Escl.csproj" />
+    </ItemGroup>
+
+</Project>

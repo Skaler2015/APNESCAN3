@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ApneScan
+Comment=Not Another PDF Scanner
+Exec=apnescan
+Icon=com.apnescan.ApneScan
+Categories=Graphics;Office;Scanning;OCR;
+MimeType=application/pdf;image/jpeg;image/png;image/tiff;image/bmp;

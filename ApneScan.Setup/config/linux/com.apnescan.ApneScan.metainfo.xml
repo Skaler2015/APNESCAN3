@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>com.apnescan.ApneScan</id>
+    <metadata_license>FSFAP</metadata_license>
+    <project_license>GPL-2.0-or-later</project_license>
+
+    <name>ApneScan - Not Another PDF Scanner</name>
+    <summary>Scan documents to PDF and more, as simply as possible.</summary>
+    <description>
+        <p>
+            ApneScan on Linux allows you to scan from USB (using SANE) and network scanners. Use your chosen settings, or
+            set up multiple profiles for different devices and configurations. Once you've finished scanning, you can
+            save, email, or print with only a couple clicks. Save to PDF, TIFF, JPEG, PNG, or other file types.
+        </p>
+        <p>
+            Easily rotate, crop, and rearrange scanned pages. Adjust brightness, contrast, and apply automatic document
+            corrections to make your scanned pages look great. Use OCR to add searchable text to your PDFs in any of
+            over 100 languages. Use batch scanning, advanced profile settings, and an optional CLI to automate tedious
+            tasks.
+        </p>
+        <p>
+            ApneScan is available on Windows, Mac, and Linux. Share your scanners over the network so you can use them
+            across devices and operating systems.
+        </p>
+    </description>
+    <url type="homepage">https://www.apnescan.com</url>
+    <url type="bugtracker">https://github.com/cyanfish/apnescan/issues</url>
+    <url type="help">https://www.apnescan.com/support</url>
+    <url type="contribute">https://www.apnescan.com/contribute</url>
+    <url type="donation">https://www.apnescan.com/donate</url>
+    <url type="translate">https://translate.apnescan.com</url>
+    <developer_name>Ben Olden-Cooligan</developer_name>
+
+    <launchable type="desktop-id">com.apnescan.ApneScan.desktop</launchable>
+    <provides>
+        <binary>apnescan</binary>
+    </provides>
+
+    <content_rating type="oars-1.1" />
+    <categories>
+        <category>Graphics</category>
+        <category>Office</category>
+    </categories>
+    <branding>
+        <color type="primary">#6688aa</color>
+    </branding>
+    <keywords>
+        <keyword translate="no">ApneScan</keyword>
+        <keyword translate="no">SANE</keyword>
+        <keyword translate="no">ESCL</keyword>
+        <keyword translate="no">PDF</keyword>
+        <keyword translate="no">TIFF</keyword>
+        <keyword>scan</keyword>
+        <keyword>scanning</keyword>
+        <keyword>scanner</keyword>
+        <keyword>duplex</keyword>
+        <keyword>ADF</keyword>
+        <keyword>OCR</keyword>
+    </keywords>
+
+    <requires>
+        <display_length compare="ge">medium</display_length>
+    </requires>
+    <recommends>
+        <display_length compare="ge">large</display_length>
+        <control>pointing</control>
+        <control>keyboard</control>
+        <control>console</control>
+        <control>tablet</control>
+        <control>touch</control>
+    </recommends>
+
+    <screenshots>
+        <screenshot type="default">
+            <image>https://www.apnescan.com/images/apnescan-gtk-screen-desktop-small.png</image>
+        </screenshot>
+        <screenshot>
+            <image>https://www.apnescan.com/images/apnescan-gtk-screen-desktop.png</image>
+        </screenshot>
+        <screenshot>
+            <image>https://www.apnescan.com/images/apnescan-gtk-screen-profile-settings.png</image>
+        </screenshot>
+        <screenshot>
+            <image>https://www.apnescan.com/images/apnescan-gtk-screen-ocr-setup.png</image>
+        </screenshot>
+    </screenshots>
+
+    <releases>
+        <release version="7.0b1" date="2022-10-25"/>
+    </releases>
+</component>

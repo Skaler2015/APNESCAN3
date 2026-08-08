@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8;net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>ApneScan.Images.Gtk</RootNamespace>
+
+        <Title>ApneScan.Images.Gtk</Title>
+        <Product>ApneScan.Images.Gtk</Product>
+        <Description>Images based on Gdk.Pixbuf for ApneScan.Sdk.</Description>
+        <PackageTags>apnescan</PackageTags>
+    </PropertyGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\SdkPackageTargets.targets"/>
+
+    <ItemGroup>
+        <ProjectReference Include="..\ApneScan.Images\ApneScan.Images.csproj" />
+        <PackageReference Include="GtkSharp" Version="3.24.24.95" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>ApneScan.Sdk.Tests</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+    <Import Project="..\ApneScan.Setup\targets\ImageUsers.targets" />
+
+</Project>

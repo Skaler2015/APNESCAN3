@@ -1,0 +1,79 @@
+﻿using CommandLine;
+using ApneScan.Tools.Localization;
+using ApneScan.Tools.Project;
+using ApneScan.Tools.Project.Installation;
+using ApneScan.Tools.Project.Packaging;
+using ApneScan.Tools.Project.Releasing;
+using ApneScan.Tools.Project.Verification;
+using ApneScan.Tools.Project.Workflows;
+using ApneScan.Tools.Sdk;
+
+namespace ApneScan.Tools;
+
+public static class Program
+{
+    // TODO: Add a "testpo"/"testlang" command that:
+    // - Takes the URL/path of a .po file as input
+    // - Downloads it
+    // - Replaces the corresponding .po file
+    // - Updates language resources for that language
+    // - Possibly then runs "pkg zip --name test-{lang}"
+
+    public static int Main(string[] args)
+    {
+        var commands = new CommandList()
+            .Add<CleanOptions, CleanCommand>()
+            .Add<BuildOptions, BuildCommand>()
+            .Add<TestOptions, TestCommand>()
+            .Add<PackageOptions, PackageCommand>()
+            .Add<InstallOptions, InstallCommand>()
+            .Add<VerifyOptions, VerifyCommand>()
+            .Add<PublishOptions, PublishCommand>()
+            .Add<VirusScanOptions, VirusScanCommand>()
+            .Add<ShareOptions, ShareCommand>()
+            .Add<TemplatesOptions, TemplatesCommand>()
+            .Add<ResxOptions, ResxCommand>()
+            .Add<PushTemplatesOptions, PushTemplatesCommand>()
+            .Add<PullTranslationsOptions, PullTranslationsCommand>()
+            .Add<LangOptions, LangCommand>()
+            .Add<SetVersionOptions, SetVersionCommand>()
+            .Add<WebsiteUpdateOptions, WebsiteUpdateCommand>()
+            .Add<UploadOptions, UploadCommand>()
+            .Add<DocOptions, DocCommand>()
+            .Add<SaneOptsOptions, SaneOptsCommand>()
+            .Add<LocalSdkOptions, LocalSdkCommand>();
+
+        var result = Parser.Default.ParseArguments(args, commands.OptionTypes);
+        if (result.Errors.Any())
+        {
+            return 1;
+        }
+        var options = (OptionsBase) result.Value;
+        Output.EnableVerbose = options.Verbose;
+        var commandType = commands.GetCommandType(options.GetType());
+        var command = Activator.CreateInstance(commandType);
+        var run = commandType.GetMethod("Run") ?? throw new InvalidOperationException();
+        run.Invoke(command, new object?[] { options });
+        return 0;
+    }
+
+    public class CommandList
+    {
+        private readonly List<Type> _optionTypes = [];
+        private readonly Dictionary<Type, Type> _optionTypeToCommandType = new();
+
+        public CommandList Add<TOption, TCommand>() where TOption : OptionsBase where TCommand : ICommand<TOption>
+        {
+            _optionTypes.Add(typeof(TOption));
+            _optionTypeToCommandType.Add(typeof(TOption), typeof(TCommand));
+            return this;
+        }
+
+        public Type[] OptionTypes => _optionTypes.ToArray();
+
+        public Type GetCommandType(Type optionType)
+        {
+            return _optionTypeToCommandType[optionType];
+        }
+    }
+}

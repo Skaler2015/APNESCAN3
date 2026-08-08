@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package ApneScan.ImportExport.Images;
+
+import "Serialization/SerializedImage.proto";
+
+message ImageTransferData {
+    int32 processId = 1;
+    repeated ApneScan.Serialization.SerializedImage serializedImages = 2;
+}

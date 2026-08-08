@@ -9,7 +9,7 @@ assignees: ''
 
 <!--
 Welcome! If you're having an issue with your particular scanner (e.g. can't find scanner, or error scanning), please don't create an issue here. Instead, you can ask for help in the support forum:
-https://github.com/cyanfish/naps2/discussions/categories/support
+https://github.com/cyanfish/apnescan/discussions/categories/support
 -->
 
 **Describe the bug**
