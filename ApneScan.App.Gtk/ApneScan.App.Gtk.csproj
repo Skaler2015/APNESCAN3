@@ -22,8 +22,8 @@
     <Import Project="..\ApneScan.Setup\targets\SdkUsers.targets" />
 
     <ItemGroup>
-        <PackageReference Include="ApneScan.Pdfium.Binaries" Version="1.3.0" />
-        <PackageReference Include="ApneScan.Tesseract.Binaries" Version="1.4.0" />
+        <PackageReference Include="NAPS2.Pdfium.Binaries" Version="1.3.0" />
+        <PackageReference Include="NAPS2.Tesseract.Binaries" Version="1.4.0" />
 
         <ProjectReference Include="..\ApneScan.Lib.Gtk\ApneScan.Lib.Gtk.csproj" />
 

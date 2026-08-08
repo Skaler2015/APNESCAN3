@@ -1,0 +1,44 @@
+name: Build Portable (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/naps2-repo-copy-n32wvi
+    paths:
+      - '.github/workflows/build-portable.yml'
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish ApneScan (win-x64, self-contained, portable)
+        shell: pwsh
+        run: >
+          dotnet publish ApneScan.App.WinForms/ApneScan.App.WinForms.csproj
+          -c Release-Zip
+          -f net10.0-windows
+          -r win-x64
+          --self-contained true
+          -p:PublishTrimmed=false
+          -o publish/ApneScan
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path publish/ApneScan/* -DestinationPath ApneScan-portable-win-x64.zip -Force
+
+      - name: Upload portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApneScan-portable-win-x64
+          path: ApneScan-portable-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30

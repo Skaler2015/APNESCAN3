@@ -11,7 +11,7 @@ using ApneScan.Scan.Internal;
 using ApneScan.Scan.Internal.Twain;
 #if !MAC
 using ApneScan.Scan.Internal.Wia;
-using ApneScan.Wia;
+using NAPS2.Wia;
 #endif
 using ApneScan.Serialization;
 

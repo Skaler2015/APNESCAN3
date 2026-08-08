@@ -16,7 +16,7 @@
     <Import Project="..\ApneScan.Setup\targets\SdkPackageTargets.targets" />
 
     <ItemGroup>
-        <PackageReference Include="ApneScan.Mdns" Version="1.0.1" />
+        <PackageReference Include="NAPS2.Mdns" Version="1.0.1" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
          <PackageReference Include="Polyfill" Version="11.0.1" PrivateAssets="all" />
         <PackageReference Include="StandardSocketsHttpHandler" Version="2.2.0.10" />

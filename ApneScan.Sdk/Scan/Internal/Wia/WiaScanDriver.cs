@@ -4,7 +4,7 @@ using System.Threading;
 using Microsoft.Extensions.Logging;
 using ApneScan.Remoting.Worker;
 using ApneScan.Scan.Exceptions;
-using ApneScan.Wia;
+using NAPS2.Wia;
 
 namespace ApneScan.Scan.Internal.Wia;
 

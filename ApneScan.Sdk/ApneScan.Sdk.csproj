@@ -33,9 +33,9 @@
     <PackageReference Include="Grpc.Tools" Version="2.83.0-pre1" PrivateAssets="all" />
     <PackageReference Include="GrpcDotNetNamedPipes" Version="3.1.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
-    <PackageReference Include="ApneScan.NTwain" Version="1.0.1" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
-    <PackageReference Include="ApneScan.PdfSharp" Version="1.0.1" />
-    <PackageReference Include="ApneScan.Wia" Version="2.0.3" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
+    <PackageReference Include="NAPS2.NTwain" Version="1.0.1" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
+    <PackageReference Include="NAPS2.PdfSharp" Version="1.0.1" />
+    <PackageReference Include="NAPS2.Wia" Version="2.0.3" Condition="'$(TargetFramework)' != 'net10.0-macos'" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="SixLabors.Fonts" Version="1.0.1" />
     <PackageReference Include="System.Collections.Immutable" Version="10.0.10" />

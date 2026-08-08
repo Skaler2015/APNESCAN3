@@ -6,7 +6,7 @@ using ApneScan.Scan.Exceptions;
 using ApneScan.Scan.Internal;
 #if !MAC
 using ApneScan.Scan.Internal.Wia;
-using ApneScan.Wia;
+using NAPS2.Wia;
 #endif
 
 namespace ApneScan.Scan;

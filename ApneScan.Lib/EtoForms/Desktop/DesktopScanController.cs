@@ -1,7 +1,7 @@
 using ApneScan.EtoForms.Ui;
 using ApneScan.Scan;
 #if !MAC
-using ApneScan.Wia;
+using NAPS2.Wia;
 #endif
 
 namespace ApneScan.EtoForms.Desktop;

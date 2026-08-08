@@ -1,6 +1,6 @@
 ﻿#if !MAC
 using ApneScan.Scan.Exceptions;
-using ApneScan.Wia;
+using NAPS2.Wia;
 
 namespace ApneScan.Scan.Internal.Wia;
 
