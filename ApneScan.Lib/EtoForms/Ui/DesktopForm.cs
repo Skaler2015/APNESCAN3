@@ -125,16 +125,17 @@ public abstract class DesktopForm : EtoFormBase
             MinimumSize = Size.Round(new SizeF(600, 300) * EtoPlatform.Current.GetLayoutScaleFactor(this)));
 
         LayoutController.RootPadding = 0;
-        LayoutController.Content = L.Column(
-            // Scan settings shown as a single horizontal bar just below the toolbar.
-            Config.Get(c => c.HiddenButtons).HasFlag(ToolbarButtons.Sidebar)
-                ? C.None()
-                : _sidebar.CreateView(this),
+
+        // Scan settings as a horizontal bar just below the toolbar.
+        var scanBar = Config.Get(c => c.HiddenButtons).HasFlag(ToolbarButtons.Sidebar)
+            ? C.None()
+            : Safe(() => _sidebar.CreateBar(this));
+
+        // Main area: scan bar on top, then [files browser | scanned pages | preview].
+        var mainArea = L.Column(
+            scanBar,
             L.Row(
-                // Left navigation sidebar.
-                CreateNavSidebar(),
-                // In-app file browser, shown right next to the nav when My Documents is clicked.
-                CreateFilesPanel(),
+                Safe(CreateFilesPanel),
                 L.Overlay(
                     // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
                     _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
@@ -145,23 +146,71 @@ public abstract class DesktopForm : EtoFormBase
                             C.Filler(),
                             _notificationArea.Content)
                     ).Padding(8)
-                ).Scale()
+                ).Scale(),
+                Safe(CreatePreviewPanel)
             ).Scale()
         );
+
+        // Left navigation sidebar in the proven resizable left panel.
+        LayoutController.Content = L.LeftPanel(
+            Safe(CreateNavSidebar),
+            mainArea
+        ).SizeConfig(
+            () => Config.Get(c => c.SidebarWidth),
+            width => Config.User.Set(c => c.SidebarWidth, width),
+            190);
+    }
+
+    // Builds a layout piece defensively: if it throws, the app still opens (that piece is just
+    // omitted) and the error is logged to %AppData%\ApneScan\startup-error.log.
+    private LayoutElement Safe(Func<LayoutElement> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+            return C.None();
+        }
+    }
+
+    private static void LogUiError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ApneScan");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "startup-error.log"),
+                $"{DateTime.Now:u} [UI] {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     // A simple left navigation sidebar with working options (reusing existing commands),
     // including a "My Documents" shortcut that opens the user's Documents folder.
     private LayoutElement CreateNavSidebar()
     {
-        var myDocuments = new ActionCommand(ShowMyDocuments)
+        var myDocuments = new ActionCommand(ShowMyDocuments) { Text = "My Documents" };
+        var addFav = new ActionCommand(AddFavourite) { Text = "＋ Add folder to Favourites" };
+        _favStack = new StackLayout
         {
-            Text = "My Documents"
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
+        RefreshFavourites();
         return L.Column(
             C.Label("WORKSPACE"),
             NavButton(Commands.Scan),
             NavButton(myDocuments),
+            _favStack,
+            NavButton(addFav),
             NavButton(Commands.Import),
             C.Spacer(),
             C.Label("LIBRARY"),
@@ -201,6 +250,7 @@ public abstract class DesktopForm : EtoFormBase
             }
         };
         _filesGrid.CellDoubleClick += FilesEntryActivated;
+        _filesGrid.SelectionChanged += (_, _) => UpdatePreview(_filesGrid?.SelectedItem as FileSystemInfo);
         _filesPathLabel = new Label { Text = "" };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
         return L.Column(
@@ -261,6 +311,115 @@ public abstract class DesktopForm : EtoFormBase
             case FileInfo file:
                 ApneScan.Util.ProcessHelper.OpenFile(file.FullName);
                 break;
+        }
+    }
+
+    // ---- Favourites: folders the user pins, stored in %AppData%\ApneScan\favourites.txt ----
+
+    private StackLayout? _favStack;
+
+    private static string FavouritesFile => Path.Combine(Paths.AppData, "favourites.txt");
+
+    private List<string> LoadFavourites()
+    {
+        try
+        {
+            return File.Exists(FavouritesFile)
+                ? File.ReadAllLines(FavouritesFile).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private void RefreshFavourites()
+    {
+        if (_favStack == null) return;
+        _favStack.Items.Clear();
+        foreach (var fav in LoadFavourites())
+        {
+            var path = fav;
+            var name = Path.GetFileName(path.TrimEnd('\\', '/'));
+            if (string.IsNullOrEmpty(name)) name = path;
+            var btn = new Button { Text = "⭐ " + name, ToolTip = path };
+            btn.Click += (_, _) =>
+            {
+                LoadFolder(path);
+                _filesPanelVis.IsVisible = true;
+            };
+            _favStack.Items.Add(btn);
+        }
+    }
+
+    private void AddFavourite()
+    {
+        var dialog = new SelectFolderDialog();
+        if (dialog.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dialog.Directory))
+        {
+            var favs = LoadFavourites();
+            if (!favs.Contains(dialog.Directory))
+            {
+                favs.Add(dialog.Directory);
+                try { File.WriteAllLines(FavouritesFile, favs); } catch { /* ignore */ }
+                RefreshFavourites();
+            }
+            LoadFolder(dialog.Directory);
+            _filesPanelVis.IsVisible = true;
+        }
+    }
+
+    // ---- Right-side preview panel: shows the selected file (image preview when possible) ----
+
+    private ImageView? _previewImage;
+    private Label? _previewLabel;
+    private string? _previewPath;
+    private readonly LayoutVisibility _previewVis = new(false);
+
+    private LayoutElement CreatePreviewPanel()
+    {
+        _previewImage = new ImageView();
+        _previewLabel = new Label { Text = "" };
+        var openCmd = new ActionCommand(() =>
+        {
+            if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
+        }) { Text = "Open" };
+        return L.Column(
+            C.Label("Preview").NaturalWidth(240),
+            new Scrollable { Content = _previewImage }.Scale(),
+            _previewLabel,
+            C.Button(openCmd)
+        ).Padding(8).Visible(_previewVis);
+    }
+
+    private void UpdatePreview(FileSystemInfo? entry)
+    {
+        if (_previewLabel == null) return;
+        if (entry is FileInfo file)
+        {
+            _previewPath = file.FullName;
+            _previewLabel.Text = file.Name;
+            _previewVis.IsVisible = true;
+            if (_previewImage != null)
+            {
+                var ext = file.Extension.ToLowerInvariant();
+                try
+                {
+                    _previewImage.Image =
+                        ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
+                            ? new Bitmap(file.FullName)
+                            : null;
+                }
+                catch
+                {
+                    _previewImage.Image = null;
+                }
+            }
+        }
+        else
+        {
+            _previewVis.IsVisible = false;
         }
     }
 

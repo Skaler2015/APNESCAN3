@@ -124,6 +124,51 @@ public class Sidebar
 
     public LayoutElement CreateView(IFormBase parentWindow)
     {
+        InitControls(parentWindow);
+
+        return L.Column(
+            C.Filler().NaturalWidth(100),
+            L.Column(
+                C.Button(NewProfileCommand, ButtonImagePosition.Left).Height(30).AlignCenter()
+            ).Visible(_onboardingVis),
+            L.Column(
+                L.Row(
+                    C.Label(UiStrings.ProfileLabel).AlignTrailing(),
+                    C.Filler(),
+                    // On Mac we set an explicit height as for some reason it fixes the button style after hide+show
+                    C.Button(EditProfileCommand, ButtonImagePosition.Overlay)
+                        .Height(EtoPlatform.Current.IsMac ? 20 : null).Width(30),
+                    C.Button(NewProfileCommand, ButtonImagePosition.Overlay)
+                        .Height(EtoPlatform.Current.IsMac ? 20 : null).Width(30)
+                ),
+                _profile.AsControl(),
+                C.Spacer(),
+                _deviceSelectorWidget,
+                L.Column(
+                    C.Spacer(),
+                    C.Label(UiStrings.PaperSourceLabel),
+                    _paperSource,
+                    C.Label(UiStrings.PageSizeLabel),
+                    _pageSize,
+                    C.Label(UiStrings.ResolutionLabel),
+                    _resolution,
+                    C.Label(UiStrings.BitDepthLabel),
+                    _bitDepth
+                ).Visible(_predefinedVis),
+                C.Spacer(),
+                C.Button(ScanCommand, ButtonImagePosition.Left).AlignCenter().Height(30)
+            ).Visible(!_onboardingVis),
+            C.Filler()
+        ).Padding(left: parentWindow.LayoutController.DefaultSpacing + 10, right: 10).Visible(_sidebarVis);
+    }
+
+    private bool _initialized;
+
+    private void InitControls(IFormBase parentWindow)
+    {
+        if (_initialized) return;
+        _initialized = true;
+
         _sidebarVis.IsVisible = _config.Get(c => c.SidebarVisible);
         _profile.SelectedItem = _profileManager.DefaultProfile ?? _profileManager.Profiles.FirstOrDefault();
 
@@ -145,8 +190,12 @@ public class Sidebar
         _profileManager.ProfilesUpdated += (_, _) => UpdateUiForProfile();
 
         UpdateUiForProfile();
+    }
 
-        // A single horizontal scan-settings bar shown just below the toolbar.
+    // A single horizontal scan-settings bar (shown just below the toolbar).
+    public LayoutElement CreateBar(IFormBase parentWindow)
+    {
+        InitControls(parentWindow);
         return L.Row(
             C.Label(UiStrings.ProfileLabel).AlignCenter(),
             _profile.AsControl().Width(160),
@@ -158,9 +207,9 @@ public class Sidebar
                 C.Label(UiStrings.PaperSourceLabel).AlignCenter(),
                 _paperSource.AsControl().Width(110),
                 C.Label(UiStrings.PageSizeLabel).AlignCenter(),
-                _pageSize.AsControl().Width(130),
+                _pageSize!.AsControl().Width(130),
                 C.Label(UiStrings.ResolutionLabel).AlignCenter(),
-                _resolution.AsControl().Width(100),
+                _resolution!.AsControl().Width(100),
                 C.Label(UiStrings.BitDepthLabel).AlignCenter(),
                 _bitDepth.AsControl().Width(110)
             ).Visible(_predefinedVis),
