@@ -251,6 +251,8 @@ public abstract class DesktopForm : EtoFormBase
         };
         _filesGrid.CellDoubleClick += FilesEntryActivated;
         _filesGrid.SelectionChanged += (_, _) => UpdatePreview(_filesGrid?.SelectedItem as FileSystemInfo);
+        // Allow dragging a file out of the browser (e.g. onto the pages area) to import it.
+        EtoPlatform.Current.AttachMouseMoveEvent(_filesGrid, FilesGridMouseMove);
         _filesPathLabel = new Label { Text = "" };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
         return L.Column(
@@ -311,6 +313,32 @@ public abstract class DesktopForm : EtoFormBase
             case FileInfo file:
                 ApneScan.Util.ProcessHelper.OpenFile(file.FullName);
                 break;
+        }
+    }
+
+    private bool _fileDragActive;
+
+    // Start a drag when the user drags a file row out of the browser. The pages area (and the
+    // OS) accept a file drop and import it via the existing drop handler.
+    private void FilesGridMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (_fileDragActive) return;
+        if (!e.Buttons.HasFlag(MouseButtons.Primary)) return;
+        if (_filesGrid?.SelectedItem is not FileInfo file) return;
+        try
+        {
+            _fileDragActive = true;
+            var data = new DataObject();
+            data.Uris = new[] { new Uri(file.FullName) };
+            _filesGrid.DoDragDrop(data, DragEffects.Copy);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+        finally
+        {
+            _fileDragActive = false;
         }
     }
 
