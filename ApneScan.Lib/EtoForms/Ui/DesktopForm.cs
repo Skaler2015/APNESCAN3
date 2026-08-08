@@ -196,7 +196,7 @@ public abstract class DesktopForm : EtoFormBase
     // including a "My Documents" shortcut that opens the user's Documents folder.
     private LayoutElement CreateNavSidebar()
     {
-        var myDocuments = new ActionCommand(ShowMyDocuments) { Text = "My Documents" };
+        var myDocuments = new ActionCommand(ShowMyDocuments) { Text = "My Files" };
         var addFav = new ActionCommand(AddFavourite) { Text = "＋ Add folder to Favourites" };
         _favStack = new StackLayout
         {
