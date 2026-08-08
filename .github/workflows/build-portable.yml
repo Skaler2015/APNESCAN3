@@ -8,6 +8,9 @@ on:
     paths:
       - '.github/workflows/build-portable.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-2025
@@ -20,7 +23,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Publish ApneScan (win-x64, self-contained, portable)
+      - name: Publish ApneScan as a single self-contained .exe
         shell: pwsh
         run: >
           dotnet publish ApneScan.App.WinForms/ApneScan.App.WinForms.csproj
@@ -28,17 +31,34 @@ jobs:
           -f net10.0-windows
           -r win-x64
           --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
           -p:PublishTrimmed=false
-          -o publish/ApneScan
+          -p:DebugType=none
+          -o publish
 
-      - name: Create portable ZIP
+      - name: Show output
         shell: pwsh
-        run: Compress-Archive -Path publish/ApneScan/* -DestinationPath ApneScan-portable-win-x64.zip -Force
+        run: Get-ChildItem publish | Sort-Object Length -Descending | Format-Table Name,Length
 
-      - name: Upload portable build
+      - name: Upload single exe as build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ApneScan-portable-win-x64
-          path: ApneScan-portable-win-x64.zip
+          name: ApneScan-exe
+          path: publish/ApneScan.exe
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish single exe to a GitHub Release (direct .exe download)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "apnescan-portable"
+          gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
+          gh release create $tag publish/ApneScan.exe `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --title "ApneScan - portable single .exe (win-x64)" `
+            --notes "Single-file, self-contained Windows x64 build of ApneScan. Download ApneScan.exe below and run it. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'."
