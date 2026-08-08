@@ -125,26 +125,57 @@ public abstract class DesktopForm : EtoFormBase
             MinimumSize = Size.Round(new SizeF(600, 300) * EtoPlatform.Current.GetLayoutScaleFactor(this)));
 
         LayoutController.RootPadding = 0;
-        LayoutController.Content = L.LeftPanel(
+        LayoutController.Content = L.Column(
+            // Scan settings shown as a single horizontal bar just below the toolbar.
             Config.Get(c => c.HiddenButtons).HasFlag(ToolbarButtons.Sidebar)
                 ? C.None()
                 : _sidebar.CreateView(this),
-            L.Overlay(
-                // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
-                _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
-                L.Column(
-                    C.Filler(),
-                    L.Row(
-                        GetControlButtons(),
+            L.Row(
+                // Left navigation sidebar.
+                CreateNavSidebar(),
+                L.Overlay(
+                    // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
+                    _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
+                    L.Column(
                         C.Filler(),
-                        _notificationArea.Content)
-                ).Padding(8)
+                        L.Row(
+                            GetControlButtons(),
+                            C.Filler(),
+                            _notificationArea.Content)
+                    ).Padding(8)
+                ).Scale()
             ).Scale()
-        ).SizeConfig(
-            () => Config.Get(c => c.SidebarWidth),
-            width => Config.User.Set(c => c.SidebarWidth, width),
-            200);
+        );
     }
+
+    // A simple left navigation sidebar with working options (reusing existing commands),
+    // including a "My Documents" shortcut that opens the user's Documents folder.
+    private LayoutElement CreateNavSidebar()
+    {
+        var myDocuments = new ActionCommand(() =>
+            ApneScan.Util.ProcessHelper.OpenFolder(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)))
+        {
+            Text = "My Documents"
+        };
+        return L.Column(
+            C.Label("WORKSPACE"),
+            NavButton(Commands.Scan),
+            NavButton(myDocuments),
+            NavButton(Commands.Import),
+            C.Spacer(),
+            C.Label("LIBRARY"),
+            NavButton(Commands.Profiles),
+            C.Spacer(),
+            C.Label("SYSTEM"),
+            NavButton(Commands.Settings),
+            NavButton(Commands.About),
+            C.Filler()
+        ).Padding(8);
+    }
+
+    private LayoutControl NavButton(ActionCommand command) =>
+        C.Button(command, ButtonImagePosition.Left).AlignLeading().Width(180);
 
     private void OpeningContextMenu(object? sender, EventArgs e)
     {
