@@ -31,87 +31,47 @@ jobs:
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Building version $v"
 
-      - name: Publish ApneScan (win-x64, self-contained, multi-file)
+      - name: Publish ApneScan as a single self-contained .exe (max compatibility)
         shell: pwsh
         run: >
           dotnet publish ApneScan.App.WinForms/ApneScan.App.WinForms.csproj
-          -c Release-Zip
+          -c Release
           -f net10.0-windows
           -r win-x64
           --self-contained true
-          -p:PublishSingleFile=false
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:IncludeAllContentForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
           -p:PublishTrimmed=false
           -p:DebugType=none
           -p:DebugSymbols=false
           -p:Version=${{ steps.ver.outputs.version }}
           -p:AssemblyVersion=${{ steps.ver.outputs.version }}
           -p:FileVersion=${{ steps.ver.outputs.version }}
-          -o publish/ApneScan
+          -o publish
 
-      - name: Trim unneeded DLLs (WPF/diagnostics) to reduce size
+      - name: Show output
         shell: pwsh
         run: |
-          $dir = "publish/ApneScan"
-          $exclude = @(
-            'Microsoft.VisualBasic','System.Data','System.Private.DataContract',
-            'System.Windows.Forms.Design','D3D','Presentation','Reach',
-            'System.Windows.Controls.Ribbon','System.Windows.Input',
-            'System.Windows.Presentation','System.Xaml','UIAutomation',
-            'WindowsBase','wpfgfx','createdump','Microsoft.DiaSymReader',
-            'mscordaccore','mscordbi','PenImc'
-          )
-          function IsExcluded($name) {
-            foreach ($e in $exclude) { if ($name -like "$e*") { return $true } }
-            return $false
-          }
-          # Delete matching files (never the main exe)
-          Get-ChildItem $dir -File | Where-Object {
-            ($_.Extension -in '.dll','.exe') -and ($_.Name -ne 'ApneScan.exe') -and (IsExcluded $_.Name)
-          } | ForEach-Object { Write-Host "remove $($_.Name)"; Remove-Item $_.FullName -Force }
-          # Keep deps.json consistent: drop the same entries
-          $depsPath = Join-Path $dir 'ApneScan.deps.json'
-          if (Test-Path $depsPath) {
-            $deps = Get-Content $depsPath -Raw | ConvertFrom-Json -Depth 100
-            foreach ($tk in $deps.targets.PSObject.Properties) {
-              foreach ($lib in $tk.Value.PSObject.Properties) {
-                foreach ($sec in @('runtime','native','resources')) {
-                  $s = $lib.Value.$sec
-                  if ($s) {
-                    foreach ($f in @($s.PSObject.Properties)) {
-                      $fname = ($f.Name -split '/')[-1]
-                      if (IsExcluded $fname) { $s.PSObject.Properties.Remove($f.Name) }
-                    }
-                  }
-                }
-              }
-            }
-            $deps | ConvertTo-Json -Depth 100 | Set-Content $depsPath -Encoding UTF8
-          }
-
-      - name: Show size
-        shell: pwsh
-        run: |
-          $bytes = (Get-ChildItem publish/ApneScan -Recurse | Measure-Object Length -Sum).Sum
-          "Unpacked size: {0:N1} MB" -f ($bytes/1MB)
-
-      - name: Create portable ZIP
-        shell: pwsh
-        run: Compress-Archive -Path publish/ApneScan -DestinationPath ApneScan-portable-win-x64.zip -Force
+          Get-ChildItem publish | Sort-Object Length -Descending | Format-Table Name,Length
+          $mb = (Get-Item publish/ApneScan.exe).Length/1MB
+          "ApneScan.exe size: {0:N1} MB" -f $mb
 
       - name: Generate update.json (auto-update feed)
         shell: pwsh
         run: |
-          $zip = "ApneScan-portable-win-x64.zip"
-          $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($zip))
+          $exe = "publish/ApneScan.exe"
+          $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($exe))
           $sha256 = [Convert]::ToBase64String($hash)
-          $zipUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/apnescan-portable/$zip"
+          $exeUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/apnescan-portable/ApneScan.exe"
           $obj = [ordered]@{
             versions = @(
               [ordered]@{
                 name = "${{ steps.ver.outputs.version }}"
                 requires = [ordered]@{ gte = "1.0.0" }
                 files = [ordered]@{
-                  zip = [ordered]@{ url = $zipUrl; sha256 = $sha256 }
+                  exe = [ordered]@{ url = $exeUrl; sha256 = $sha256 }
                 }
               }
             )
@@ -122,20 +82,20 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ApneScan-portable-win-x64
-          path: ApneScan-portable-win-x64.zip
+          name: ApneScan-exe
+          path: publish/ApneScan.exe
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish ZIP + update feed to a GitHub Release (direct download)
+      - name: Publish exe + update feed to a GitHub Release (direct download)
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "apnescan-portable"
           gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
-          gh release create $tag ApneScan-portable-win-x64.zip update.json `
+          gh release create $tag publish/ApneScan.exe update.json `
             --repo $env:GITHUB_REPOSITORY `
             --target $env:GITHUB_SHA `
-            --title "ApneScan ${{ steps.ver.outputs.version }} (portable, win-x64)" `
-            --notes "Self-contained Windows x64 portable build of ApneScan, version ${{ steps.ver.outputs.version }}. Download the ZIP, extract it, and run ApneScan.exe inside the ApneScan folder. The app checks this release for updates and can update itself automatically. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'. Keep all files together in the folder."
+            --title "ApneScan ${{ steps.ver.outputs.version }} (single .exe, win-x64)" `
+            --notes "Single-file, self-contained Windows x64 build of ApneScan, version ${{ steps.ver.outputs.version }}. Download ApneScan.exe and double-click to run - no install, no folder. The app checks this release for updates and updates itself automatically. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'. First launch is a little slower (it unpacks once)."

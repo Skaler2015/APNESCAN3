@@ -115,10 +115,30 @@ public class UpdateOperation : OperationBase
 
     private void InstallExe()
     {
+        // The distributed app is a single self-contained exe. Self-replace it: wait for this
+        // process to exit, overwrite the running exe with the freshly downloaded one, relaunch.
+        var currentExe = Environment.ProcessPath!;
+        var newExe = _tempPath!;
+        var pid = Process.GetCurrentProcess().Id;
+        var scriptPath = Path.Combine(_tempFolder!, "apnescan_update.bat");
+        var script =
+            "@echo off\r\n" +
+            ":waitloop\r\n" +
+            $"tasklist /FI \"PID eq {pid}\" 2>nul | find \"{pid}\" >nul\r\n" +
+            "if not errorlevel 1 (\r\n" +
+            "    ping -n 2 127.0.0.1 >nul\r\n" +
+            "    goto waitloop\r\n" +
+            ")\r\n" +
+            $"copy /Y \"{newExe}\" \"{currentExe}\" >nul\r\n" +
+            $"start \"\" \"{currentExe}\"\r\n";
+        File.WriteAllText(scriptPath, script);
         Process.Start(new ProcessStartInfo
         {
-            FileName = _tempPath,
-            Arguments = "/SILENT /CLOSEAPPLICATIONS"
+            FileName = "cmd.exe",
+            Arguments = $"/c \"\"{scriptPath}\"\"",
+            UseShellExecute = true,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
         });
     }
 
