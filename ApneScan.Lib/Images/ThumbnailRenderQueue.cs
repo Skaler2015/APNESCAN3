@@ -75,7 +75,21 @@ public class ThumbnailRenderQueue : IDisposable
         // TODO: Make this run as async?
         // TODO: Verify WorkerFactory is not null? Or handle this better for tests?
         bool useWorker = PlatformCompat.System.RenderInWorker;
-        var worker = useWorker ? _scanningContext.CreateWorker(WorkerType.Native) : null;
+        WorkerContext? worker = null;
+        if (useWorker)
+        {
+            try
+            {
+                worker = _scanningContext.CreateWorker(WorkerType.Native);
+            }
+            catch (Exception ex)
+            {
+                // If a render worker can't be started, fall back to in-process rendering rather
+                // than crashing the app.
+                Log.ErrorException("Could not start thumbnail render worker; rendering in-process", ex);
+                worker = null;
+            }
+        }
         var fallback = new ExpFallback(100, 60 * 1000);
         while (true)
         {
@@ -118,7 +132,15 @@ public class ThumbnailRenderQueue : IDisposable
                 if (worker != null)
                 {
                     worker.Dispose();
-                    worker = _scanningContext.CreateWorker(WorkerType.Native);
+                    try
+                    {
+                        worker = _scanningContext.CreateWorker(WorkerType.Native);
+                    }
+                    catch (Exception ex2)
+                    {
+                        Log.ErrorException("Could not restart thumbnail worker; rendering in-process", ex2);
+                        worker = null;
+                    }
                 }
                 Thread.Sleep(fallback.Value);
                 fallback.Increase();

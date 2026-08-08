@@ -40,7 +40,10 @@ internal class WorkerFactory : IWorkerFactory
             return new WorkerFactory(Environment.ProcessPath!, null, env);
         }
 #endif
-        var exePath = Path.Combine(AssemblyHelper.EntryFolder, "ApneScan.exe");
+        // The native worker is this same app relaunched with the "worker" arg. Use the actual
+        // running executable path (works for both normal and single-file builds, where the exe
+        // does not live in the extracted content folder).
+        var exePath = Environment.ProcessPath ?? Path.Combine(AssemblyHelper.EntryFolder, "ApneScan.exe");
         string[] candidateWorkerPaths =
         {
 #if DEBUG
