@@ -249,10 +249,28 @@ public abstract class DesktopForm : EtoFormBase
                 }
             }
         };
+        _filesGrid.AllowMultipleSelection = true;
         _filesGrid.CellDoubleClick += FilesEntryActivated;
         _filesGrid.SelectionChanged += (_, _) => UpdatePreview(_filesGrid?.SelectedItem as FileSystemInfo);
         // Allow dragging a file out of the browser (e.g. onto the pages area) to import it.
         EtoPlatform.Current.AttachMouseMoveEvent(_filesGrid, FilesGridMouseMove);
+        // F2 to rename; right-click for rename / batch rename.
+        _filesGrid.KeyDown += (_, e) =>
+        {
+            if (e.Key == Keys.F2)
+            {
+                RenameSelected();
+                e.Handled = true;
+            }
+        };
+        var renameItem = new ButtonMenuItem { Text = "Rename (F2)" };
+        renameItem.Click += (_, _) => RenameSelected();
+        var batchItem = new ButtonMenuItem { Text = "Batch rename…" };
+        batchItem.Click += (_, _) => BatchRename();
+        var cm = new ContextMenu();
+        cm.Items.Add(renameItem);
+        cm.Items.Add(batchItem);
+        _filesGrid.ContextMenu = cm;
         _filesPathLabel = new Label { Text = "" };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
         return L.Column(
@@ -340,6 +358,90 @@ public abstract class DesktopForm : EtoFormBase
         {
             _fileDragActive = false;
         }
+    }
+
+    // ---- Rename: F2 (single) and batch rename in the My Files browser ----
+
+    private void RenameSelected()
+    {
+        if (_filesGrid?.SelectedItem is not FileSystemInfo entry) return;
+        var newName = PromptForText("Rename", entry.Name);
+        if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(entry.FullName)!;
+            var target = Path.Combine(dir, newName);
+            if (entry is DirectoryInfo)
+            {
+                Directory.Move(entry.FullName, target);
+            }
+            else
+            {
+                File.Move(entry.FullName, target);
+            }
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    private void BatchRename()
+    {
+        var selected = _filesGrid?.SelectedItems?.OfType<FileInfo>().ToList() ?? new List<FileInfo>();
+        if (selected.Count == 0) return;
+        var baseName = PromptForText($"Batch rename {selected.Count} file(s) — base name", "Document");
+        if (string.IsNullOrWhiteSpace(baseName)) return;
+        try
+        {
+            int i = 1;
+            foreach (var f in selected.OrderBy(x => x.Name))
+            {
+                var target = Path.Combine(Path.GetDirectoryName(f.FullName)!, $"{baseName} ({i}){f.Extension}");
+                if (!File.Exists(target))
+                {
+                    File.Move(f.FullName, target);
+                }
+                i++;
+            }
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // Minimal text-input dialog (Eto has no built-in input box).
+    private string? PromptForText(string title, string initial)
+    {
+        string? result = null;
+        var dlg = new Dialog { Title = title, Resizable = false };
+        var tb = new TextBox { Text = initial, Width = 320 };
+        var ok = new Button { Text = "OK" };
+        ok.Click += (_, _) => { result = tb.Text; dlg.Close(); };
+        var cancel = new Button { Text = "Cancel" };
+        cancel.Click += (_, _) => { result = null; dlg.Close(); };
+        dlg.DefaultButton = ok;
+        dlg.AbortButton = cancel;
+        dlg.Content = new StackLayout
+        {
+            Padding = 12,
+            Spacing = 10,
+            Items =
+            {
+                tb,
+                new StackLayout
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Items = { ok, cancel }
+                }
+            }
+        };
+        dlg.ShowModal(this);
+        return result;
     }
 
     // ---- Favourites: folders the user pins, stored in %AppData%\ApneScan\favourites.txt ----
