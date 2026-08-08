@@ -34,7 +34,7 @@ public static class InternalDefaults
             NoUserProfiles = false,
             AlwaysRememberDevice = false,
             NoUpdatePrompt = false,
-            CheckForUpdates = false,
+            CheckForUpdates = true,
             HasCheckedForUpdates = false,
             LastUpdateCheckDate = null,
             HasBeenRun = false,

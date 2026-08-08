@@ -23,6 +23,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Compute version (1.0.<run_number>)
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "1.0.$env:GITHUB_RUN_NUMBER"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version $v"
+
       - name: Publish ApneScan (win-x64, self-contained, multi-file)
         shell: pwsh
         run: >
@@ -35,6 +43,9 @@ jobs:
           -p:PublishTrimmed=false
           -p:DebugType=none
           -p:DebugSymbols=false
+          -p:Version=${{ steps.ver.outputs.version }}
+          -p:AssemblyVersion=${{ steps.ver.outputs.version }}
+          -p:FileVersion=${{ steps.ver.outputs.version }}
           -o publish/ApneScan
 
       - name: Trim unneeded DLLs (WPF/diagnostics) to reduce size
@@ -87,6 +98,27 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path publish/ApneScan -DestinationPath ApneScan-portable-win-x64.zip -Force
 
+      - name: Generate update.json (auto-update feed)
+        shell: pwsh
+        run: |
+          $zip = "ApneScan-portable-win-x64.zip"
+          $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($zip))
+          $sha256 = [Convert]::ToBase64String($hash)
+          $zipUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/apnescan-portable/$zip"
+          $obj = [ordered]@{
+            versions = @(
+              [ordered]@{
+                name = "${{ steps.ver.outputs.version }}"
+                requires = [ordered]@{ gte = "1.0.0" }
+                files = [ordered]@{
+                  zip = [ordered]@{ url = $zipUrl; sha256 = $sha256 }
+                }
+              }
+            )
+          }
+          $obj | ConvertTo-Json -Depth 10 | Set-Content -Path update.json -Encoding UTF8
+          Get-Content update.json
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,15 +127,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish ZIP to a GitHub Release (direct download)
+      - name: Publish ZIP + update feed to a GitHub Release (direct download)
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "apnescan-portable"
           gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
-          gh release create $tag ApneScan-portable-win-x64.zip `
+          gh release create $tag ApneScan-portable-win-x64.zip update.json `
             --repo $env:GITHUB_REPOSITORY `
             --target $env:GITHUB_SHA `
-            --title "ApneScan - portable (win-x64)" `
-            --notes "Self-contained Windows x64 portable build of ApneScan. Download the ZIP, extract it, and run ApneScan.exe inside the ApneScan folder. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'. Keep all files together in the folder."
+            --title "ApneScan ${{ steps.ver.outputs.version }} (portable, win-x64)" `
+            --notes "Self-contained Windows x64 portable build of ApneScan, version ${{ steps.ver.outputs.version }}. Download the ZIP, extract it, and run ApneScan.exe inside the ApneScan folder. The app checks this release for updates and can update itself automatically. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'. Keep all files together in the folder."

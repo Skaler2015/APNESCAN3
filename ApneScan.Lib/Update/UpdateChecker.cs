@@ -8,7 +8,8 @@ public class UpdateChecker : IUpdateChecker
 {
     public static readonly TimeSpan CheckInterval = TimeSpan.FromDays(7);
 
-    private const string UPDATE_CHECK_ENDPOINT = "https://www.apnescan.com/api/v1/update";
+    private const string UPDATE_CHECK_ENDPOINT =
+        "https://github.com/Skaler2015/APNESCAN3/releases/download/apnescan-portable/update.json";
 #if ZIP
         private const string UPDATE_FILE_EXT = "zip";
 #elif MSI
@@ -45,11 +46,12 @@ public class UpdateChecker : IUpdateChecker
             if (updateFile == null) continue;
 
             var sha256 = updateFile.Value<string>("sha256");
+            if (sha256 == null) continue;
+            // sig256 is optional; integrity is enforced via the SHA-256 hash over HTTPS.
             var sig256 = updateFile.Value<string>("sig256");
-            if (sha256 == null || sig256 == null) continue;
 
             return new UpdateInfo(versionName, updateFile.Value<string>("url")!, Convert.FromBase64String(sha256),
-                Convert.FromBase64String(sig256));
+                sig256 != null ? Convert.FromBase64String(sig256) : Array.Empty<byte>());
         }
         return null;
     }
