@@ -1,10 +1,4 @@
-# ApneScan - Not Another PDF Scanner
-
-<p align="center">
-<img src="https://www.apnescan.com/images/apnescan-desktop-win.png?1" width="400" alt="ApneScan on Windows" /> <img src="https://www.apnescan.com/images/apnescan-desktop-mac.png?1" width="400" alt="ApneScan on Mac" /> <img src="https://www.apnescan.com/images/apnescan-desktop-linux.png?1" width="400" alt="ApneScan on Linux" />
-  <br/>
-  <i>ApneScan on Windows, Mac, and Linux</i>
-</p>
+# ApneScan
 
 ApneScan is a document scanning application with a focus on simplicity and ease of use. Scan your documents from WIA, TWAIN, SANE, and ESCL scanners, organize the pages as you like, and save them as PDF, TIFF, JPEG, or PNG. Optical character recognition (OCR) is available using [Tesseract](https://github.com/tesseract-ocr/tesseract).
 
@@ -13,24 +7,27 @@ System requirements:
 - macOS 10.15+ (x64, arm64)
 - Linux (x64, arm64) (GTK 3.20+, glibc 2.27+, libsane)
 
-Visit the ApneScan home page at [www.apnescan.com](http://www.apnescan.com).
-
-Other links:
-- [Downloads](https://www.apnescan.com/download)
-- [Documentation](https://www.apnescan.com/support)
-- [Translations](https://translate.apnescan.com/)
-- [File a Ticket](https://sourceforge.net/p/apnescan/tickets/)
-- [Donate](https://www.apnescan.com/donate?src=readme)
-
 ## ApneScan.Sdk (for developers)
 
-[![NuGet](https://img.shields.io/nuget/v/ApneScan.Sdk)](https://www.nuget.org/packages/ApneScan.Sdk/)
-
-[ApneScan.Sdk](https://github.com/cyanfish/apnescan/tree/master/ApneScan.Sdk) is a fully-featured scanning library, supporting WIA, TWAIN, SANE, and ESCL scanners on Windows, Mac, and Linux.
-[Read more.](https://github.com/cyanfish/apnescan/tree/master/ApneScan.Sdk)
+[ApneScan.Sdk](https://github.com/Skaler2015/APNESCAN3/tree/main/ApneScan.Sdk) is a fully-featured scanning library, supporting WIA, TWAIN, SANE, and ESCL scanners on Windows, Mac, and Linux.
 
 ## Build Instructions
-Looking to contribute to ApneScan or ApneScan.Sdk? Have a look at the [Github wiki](https://github.com/cyanfish/apnescan/wiki/1.-Building-&-Development-Environment) for build instructions and more.
+
+ApneScan is built with .NET. To build the full solution:
+
+```
+dotnet build ApneScan.sln
+```
+
+Individual projects (for example the console app) can be run with:
+
+```
+dotnet run --project ApneScan.App.Console
+```
+
+## Credits
+
+ApneScan is based on the open-source [NAPS2](https://github.com/cyanfish/naps2) project by Ben Olden-Cooligan and contributors. Many thanks to the original authors and the NAPS2 community.
 
 ## License
 
