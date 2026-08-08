@@ -78,7 +78,7 @@ internal class WorkerServiceImpl : WorkerService.WorkerServiceBase
         {
             try
             {
-                using var deviceManager = new WiaDeviceManager(Wia.WiaVersion.Wia10);
+                using var deviceManager = new WiaDeviceManager(NAPS2.Wia.WiaVersion.Wia10);
                 using var device = deviceManager.FindDevice(request.DeviceId);
                 var item = device.PromptToConfigure((IntPtr) request.Hwnd);
                 var response = new Wia10NativeUiResponse();
