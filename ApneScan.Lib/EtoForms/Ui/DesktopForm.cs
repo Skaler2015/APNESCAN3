@@ -133,6 +133,8 @@ public abstract class DesktopForm : EtoFormBase
             L.Row(
                 // Left navigation sidebar.
                 CreateNavSidebar(),
+                // In-app file browser, shown right next to the nav when My Documents is clicked.
+                CreateFilesPanel(),
                 L.Overlay(
                     // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
                     _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
@@ -152,9 +154,7 @@ public abstract class DesktopForm : EtoFormBase
     // including a "My Documents" shortcut that opens the user's Documents folder.
     private LayoutElement CreateNavSidebar()
     {
-        var myDocuments = new ActionCommand(() =>
-            ApneScan.Util.ProcessHelper.OpenFolder(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)))
+        var myDocuments = new ActionCommand(ShowMyDocuments)
         {
             Text = "My Documents"
         };
@@ -176,6 +176,93 @@ public abstract class DesktopForm : EtoFormBase
 
     private LayoutControl NavButton(ActionCommand command) =>
         C.Button(command, ButtonImagePosition.Left).AlignLeading().Width(180);
+
+    private GridView? _filesGrid;
+    private Label? _filesPathLabel;
+    private readonly LayoutVisibility _filesPanelVis = new(false);
+    private string _currentFolder = "";
+
+    // An in-app file browser panel shown right next to the navigation sidebar. Opened by the
+    // "My Documents" nav item; lets the user browse folders and open files without leaving the app.
+    private LayoutElement CreateFilesPanel()
+    {
+        _filesGrid = new GridView
+        {
+            Width = 240,
+            ShowHeader = false,
+            Columns =
+            {
+                new GridColumn
+                {
+                    DataCell = new TextBoxCell
+                        { Binding = new DelegateBinding<FileSystemInfo, string>(GetEntryLabel) },
+                    Width = 228
+                }
+            }
+        };
+        _filesGrid.CellDoubleClick += FilesEntryActivated;
+        _filesPathLabel = new Label { Text = "" };
+        var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
+        return L.Column(
+            L.Row(
+                C.Button(upCommand).Width(36),
+                _filesPathLabel.AlignCenter()
+            ),
+            _filesGrid.Scale()
+        ).Padding(4).Visible(_filesPanelVis);
+    }
+
+    private static string GetEntryLabel(FileSystemInfo entry) =>
+        entry is DirectoryInfo ? "📁 " + entry.Name : entry.Name;
+
+    private void ShowMyDocuments()
+    {
+        // Toggle: clicking My Documents again closes the in-app file panel.
+        if (_filesPanelVis.IsVisible)
+        {
+            _filesPanelVis.IsVisible = false;
+            return;
+        }
+        LoadFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        _filesPanelVis.IsVisible = true;
+    }
+
+    private void LoadFolder(string folder)
+    {
+        _currentFolder = folder;
+        if (_filesPathLabel != null) _filesPathLabel.Text = folder;
+        var entries = new List<FileSystemInfo>();
+        try
+        {
+            var dir = new DirectoryInfo(folder);
+            entries.AddRange(dir.GetDirectories().OrderBy(d => d.Name));
+            entries.AddRange(dir.GetFiles().OrderBy(f => f.Name));
+        }
+        catch (Exception)
+        {
+            // Ignore folders we can't read.
+        }
+        if (_filesGrid != null) _filesGrid.DataStore = entries;
+    }
+
+    private void GoUpFolder()
+    {
+        var parent = Directory.GetParent(_currentFolder);
+        if (parent != null) LoadFolder(parent.FullName);
+    }
+
+    private void FilesEntryActivated(object? sender, EventArgs e)
+    {
+        switch (_filesGrid?.SelectedItem)
+        {
+            case DirectoryInfo dir:
+                LoadFolder(dir.FullName);
+                break;
+            case FileInfo file:
+                ApneScan.Util.ProcessHelper.OpenFile(file.FullName);
+                break;
+        }
+    }
 
     private void OpeningContextMenu(object? sender, EventArgs e)
     {
