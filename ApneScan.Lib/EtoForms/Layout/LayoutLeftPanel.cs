@@ -23,6 +23,10 @@ public class LayoutLeftPanel : LayoutContainer
     {
         _left = left;
         _right = right;
+        // The right panel always fills the remaining width (the left panel is the fixed/resizable one).
+        // Without this it only filled when its content happened to report a large preferred width, which
+        // left wasted empty space when e.g. only a few scanned pages were present.
+        _right.Scale = true;
         Splitter = new Splitter
         {
             Orientation = Orientation.Horizontal,

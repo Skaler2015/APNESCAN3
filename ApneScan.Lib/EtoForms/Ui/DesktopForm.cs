@@ -100,7 +100,17 @@ public abstract class DesktopForm : EtoFormBase
         _contextMenu.Opening += OpeningContextMenu;
         EtoPlatform.Current.AttachMouseWheelEvent(_listView.Control, ListViewMouseWheel);
         EtoPlatform.Current.AttachMouseMoveEvent(_listView.Control, ListViewMouseMove);
-        EtoPlatform.Current.HandleKeyDown(this, _keyboardShortcuts.Perform);
+        // Escape closes the My Files panel (and its preview) if it's open; otherwise normal shortcuts.
+        EtoPlatform.Current.HandleKeyDown(this, key =>
+        {
+            if (key == Keys.Escape && _filesPanelVis.IsVisible)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
+                return true;
+            }
+            return _keyboardShortcuts.Perform(key);
+        });
         // In the scanned pages area, F2 auto-detects the document name (offline OCR) and lets the user
         // confirm it; every other key falls through to the normal keyboard shortcuts.
         EtoPlatform.Current.HandleKeyDown(_listView.Control, key =>
@@ -285,6 +295,12 @@ public abstract class DesktopForm : EtoFormBase
             if (e.Key == Keys.F2)
             {
                 RenameSelected();
+                e.Handled = true;
+            }
+            else if (e.Key == Keys.Escape)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
                 e.Handled = true;
             }
         };
