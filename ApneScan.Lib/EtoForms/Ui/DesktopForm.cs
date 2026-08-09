@@ -146,8 +146,7 @@ public abstract class DesktopForm : EtoFormBase
                             C.Filler(),
                             _notificationArea.Content)
                     ).Padding(8)
-                ).Scale(),
-                Safe(CreatePreviewPanel)
+                ).Scale()
             ).Scale()
         );
 
@@ -273,12 +272,29 @@ public abstract class DesktopForm : EtoFormBase
         _filesGrid.ContextMenu = cm;
         _filesPathLabel = new Label { Text = "" };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
+        // Preview is part of the file browser: file list on the left, preview on the right,
+        // so opening My Files never squeezes a separate preview column.
+        _previewImage = new ImageView();
+        _previewLabel = new Label { Text = "" };
+        var openCmd = new ActionCommand(() =>
+        {
+            if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
+        }) { Text = "Open" };
+        var previewPane = L.Column(
+            C.Label("Preview").Width(300),
+            new Scrollable { Content = _previewImage }.Scale(),
+            _previewLabel,
+            C.Button(openCmd)
+        ).Padding(6).Visible(_previewVis);
         return L.Column(
             L.Row(
                 C.Button(upCommand).Width(36),
                 _filesPathLabel.AlignCenter()
             ),
-            _filesGrid.Scale()
+            L.Row(
+                _filesGrid.Width(250),
+                previewPane
+            ).Scale()
         ).Padding(4).Visible(_filesPanelVis);
     }
 
@@ -512,28 +528,13 @@ public abstract class DesktopForm : EtoFormBase
         }
     }
 
-    // ---- Right-side preview panel: shows the selected file (image preview when possible) ----
+    // ---- File preview: shows the selected file (image preview when possible). The controls are
+    // created inside CreateFilesPanel so the preview sits next to the file list. ----
 
     private ImageView? _previewImage;
     private Label? _previewLabel;
     private string? _previewPath;
     private readonly LayoutVisibility _previewVis = new(false);
-
-    private LayoutElement CreatePreviewPanel()
-    {
-        _previewImage = new ImageView();
-        _previewLabel = new Label { Text = "" };
-        var openCmd = new ActionCommand(() =>
-        {
-            if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
-        }) { Text = "Open" };
-        return L.Column(
-            C.Label("Preview").NaturalWidth(240),
-            new Scrollable { Content = _previewImage }.Scale(),
-            _previewLabel,
-            C.Button(openCmd)
-        ).Padding(8).Visible(_previewVis);
-    }
 
     private void UpdatePreview(FileSystemInfo? entry)
     {
