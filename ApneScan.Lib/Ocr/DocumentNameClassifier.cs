@@ -15,24 +15,28 @@ public static class DocumentNameClassifier
     // documents are listed before generic ones.
     private static readonly (string Name, string[] Keywords)[] Rules =
     [
+        ("ECHS Card", ["echs", "ex-serviceman contributory", "ex servicemen contributory", "ex-servicemen contributory"]),
+        ("Army ID Card", ["indian army", "army no", "regimental", "regt no", " esm ", "esm :", "ex-serviceman", "ex serviceman", "army number"]),
         ("Aadhaar Card", ["aadhaar", "aadhar", "uidai", "unique identification", "आधार"]),
         ("PAN Card", ["permanent account number", "income tax department", "pan card"]),
-        ("Passport", ["passport", "republic of india", "type p<"]),
+        ("Passport", ["passport no", "republic of india", "type p<"]),
         ("Driving Licence", ["driving licence", "driving license", "transport department", "dl no"]),
-        ("Voter ID", ["election commission", "elector", "voter", "epic no"]),
+        ("Voter ID", ["election commission", "electoral", "epic no", "voter id"]),
         ("Ration Card", ["ration card", "food and civil supplies", "public distribution"]),
-        ("Bank Statement", ["statement of account", "account statement", "closing balance", "ifsc", "transaction details"]),
-        ("Cheque", ["pay to", "account payee", "or bearer", "ifsc code"]),
-        ("Invoice", ["invoice", "tax invoice", "bill to", "gstin", "hsn"]),
-        ("Receipt", ["receipt", "amount paid", "payment received"]),
-        ("Marksheet", ["marksheet", "mark sheet", "grade", "examination", "roll no", "board of"]),
-        ("Certificate", ["certificate", "hereby certify", "this is to certify"]),
+        ("Bank Statement", ["statement of account", "account statement", "closing balance", "transaction details"]),
+        ("Cheque", ["account payee", "or bearer", "ifsc code"]),
+        ("Invoice", ["tax invoice", "invoice no", "bill to", "gstin"]),
+        ("Receipt", ["receipt no", "amount paid", "payment received"]),
+        ("Marksheet", ["marksheet", "mark sheet", "board of secondary", "roll no", "examination"]),
         ("Salary Slip", ["salary slip", "pay slip", "payslip", "net pay", "earnings", "deductions"]),
-        ("Health Scheme", ["ayushman", "health scheme", "insurance", "policy no", "medical"]),
-        ("Prescription", ["prescription", "rx", "tablet", "dosage", "diagnosis"]),
-        ("Agreement", ["agreement", "hereby agree", "terms and conditions", "party of the"]),
-        ("Resume", ["curriculum vitae", "resume", "work experience", "objective", "skills"]),
-        ("Letter", ["dear sir", "dear madam", "yours faithfully", "yours sincerely", "subject:"]),
+        ("Discharge Summary", ["discharge summary", "discharge card", "date of discharge"]),
+        ("Prescription", ["prescription", "diagnosis", "dosage"]),
+        ("Health Scheme", ["ayushman", "health scheme", "policy no", "mediclaim"]),
+        ("Medical Report", ["medical report", "pathology", "laboratory", "test report", "haemoglobin"]),
+        ("Certificate", ["hereby certify", "this is to certify", "certificate"]),
+        ("Agreement", ["hereby agree", "terms and conditions", "party of the first part"]),
+        ("Resume", ["curriculum vitae", "work experience", "career objective"]),
+        ("Letter", ["dear sir", "dear madam", "yours faithfully", "yours sincerely"]),
     ];
 
     /// <summary>
@@ -45,7 +49,7 @@ public static class DocumentNameClassifier
             return null;
         }
 
-        var normalized = ocrText.ToLowerInvariant();
+        var normalized = " " + ocrText.ToLowerInvariant() + " ";
 
         foreach (var (name, keywords) in Rules)
         {
@@ -55,25 +59,46 @@ public static class DocumentNameClassifier
             }
         }
 
-        // No known document type matched - fall back to the first meaningful line of text
-        // (e.g. a heading), which is often a good title.
-        var heading = FirstMeaningfulLine(ocrText);
-        return heading;
+        // No known document type matched - fall back to the best heading-like line of text. This is
+        // deliberately strict: a bad guess (OCR noise like "ie en") is worse than no name at all, in
+        // which case we return null and the page just keeps its number.
+        return BestHeadingLine(ocrText);
     }
 
-    private static string? FirstMeaningfulLine(string text)
+    // Picks the most title-like line: enough real letters, at least two words, and containing a proper
+    // word (>= 4 letters). Returns the strongest candidate, or null if nothing qualifies.
+    private static string? BestHeadingLine(string text)
     {
+        string? best = null;
+        int bestScore = 0;
         foreach (var rawLine in text.Split('\n'))
         {
             var line = CleanForFileName(rawLine);
-            // A useful heading has a few real words and isn't just noise.
-            var letterCount = line.Count(char.IsLetter);
-            if (line.Length >= 4 && letterCount >= 3 && line.Split(' ').Length <= 8)
+            if (line.Length < 6)
             {
-                return Truncate(line, 40);
+                continue;
+            }
+            var words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            int letterCount = line.Count(char.IsLetter);
+            int longWords = words.Count(w => w.Count(char.IsLetter) >= 4);
+            // Require real content: mostly letters, at least two words, and a genuine word (not "ie en").
+            if (letterCount < 8 || words.Length < 2 || longWords < 1)
+            {
+                continue;
+            }
+            // Reject lines that are mostly digits/symbols.
+            if (letterCount < line.Replace(" ", "").Length / 2)
+            {
+                continue;
+            }
+            int score = letterCount + longWords * 3;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = Truncate(line, 40);
             }
         }
-        return null;
+        return best;
     }
 
     // Strips characters that aren't valid in file names and collapses whitespace.
