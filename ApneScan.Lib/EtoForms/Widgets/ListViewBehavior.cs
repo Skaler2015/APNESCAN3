@@ -18,6 +18,13 @@ public abstract class ListViewBehavior<T> where T : notnull
 
     public virtual bool ShowPageNumbers => false;
 
+    /// <summary>
+    /// Returns a custom label to draw beneath an item (e.g. an auto-detected document name), or null to
+    /// fall back to the default page-number label. When non-null, the label is shown even if page numbers
+    /// are otherwise off.
+    /// </summary>
+    public virtual string? GetPageLabel(T item, int index, int count) => null;
+
     public bool ScrollOnDrag { get; protected set; }
 
     public bool UseHandCursor { get; protected set; }

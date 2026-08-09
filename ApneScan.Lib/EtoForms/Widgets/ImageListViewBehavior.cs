@@ -24,6 +24,18 @@ public class ImageListViewBehavior : ListViewBehavior<UiImage>
 
     public override bool ShowPageNumbers => _config.Get(c => c.ShowPageNumbers);
 
+    /// <summary>
+    /// Optional provider that returns an auto-detected document name to show beneath a page (set by the
+    /// desktop form). When it returns a non-empty string, that name is drawn instead of the page number.
+    /// </summary>
+    public Func<UiImage, int, int, string?>? PageLabelProvider { get; set; }
+
+    public override string? GetPageLabel(UiImage item, int index, int count)
+    {
+        var label = PageLabelProvider?.Invoke(item, index, count);
+        return string.IsNullOrWhiteSpace(label) ? null : label;
+    }
+
     public override Image GetImage(IListView<UiImage> listView, UiImage item)
     {
         using var thumbnail = _thumbnailProvider.GetThumbnail(item, listView.ImageSize.Width);

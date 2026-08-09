@@ -87,6 +87,9 @@ public abstract class DesktopForm : EtoFormBase
         UpdateProfilesToolbar();
         InitLanguageDropdown();
 
+        // Show the auto-detected document name beneath each scanned page (instead of "1 / 2").
+        imageListViewBehavior.PageLabelProvider =
+            (_, _, _) => string.IsNullOrWhiteSpace(_documentName) ? null : _documentName;
         _listView = EtoPlatform.Current.CreateListView(imageListViewBehavior);
         _listView.Selection = ImageList.Selection;
         _listView.ItemClicked += ListViewItemClicked;
@@ -808,6 +811,50 @@ public abstract class DesktopForm : EtoFormBase
     private void ImageList_ImagesUpdated(object? sender, ImageListEventArgs e)
     {
         Invoker.Current.InvokeDispatch(UpdateToolbar);
+        MaybeAutoDetectName();
+    }
+
+    private bool _autoNameTried;
+
+    // Automatically detects the document name (offline OCR) once after pages are scanned/imported, and
+    // shows it beneath the pages. Runs at most once per batch; forgotten when the pages are cleared so a
+    // new scan is detected fresh.
+    private void MaybeAutoDetectName()
+    {
+        var first = ImageList.Images.FirstOrDefault();
+        if (first == null)
+        {
+            _autoNameTried = false;
+            if (!string.IsNullOrEmpty(_documentName))
+            {
+                _documentName = null;
+                Config.Run.Remove(c => c.PdfSettings.DefaultFileName);
+                Config.Run.Remove(c => c.ImageSettings.DefaultFileName);
+                RefreshTitle();
+                _listView.Control.Invalidate();
+            }
+            return;
+        }
+        if (!string.IsNullOrEmpty(_documentName) || _autoNameTried)
+        {
+            return;
+        }
+        _autoNameTried = true;
+        Task.Run(async () =>
+        {
+            try
+            {
+                var name = await _desktopController.DetectDocumentName(first);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    Invoker.Current.InvokeDispatch(() => ApplyDocumentName(name!.Trim()));
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUiError(ex);
+            }
+        });
     }
 
     private void ImageList_ImagesThumbnailInvalidated(object? sender, ImageListEventArgs e)
@@ -1245,6 +1292,8 @@ public abstract class DesktopForm : EtoFormBase
         Config.Run.Set(c => c.PdfSettings.DefaultFileName, name);
         Config.Run.Set(c => c.ImageSettings.DefaultFileName, name);
         RefreshTitle();
+        // Repaint the pages so the new name shows beneath each thumbnail.
+        _listView.Control.Invalidate();
     }
 
     private void ListViewMouseWheel(object? sender, MouseEventArgs e)

@@ -93,7 +93,12 @@ public class WinFormsListView<T> : IListView<T> where T : notnull
         var image = ImageList.Get(e.Item);
         int imageSizeW = (int) Math.Round(_imageSize.Width * _dpiScale);
         int imageSizeH = (int) Math.Round(_imageSize.Height * _dpiScale);
-        if (_behavior.ShowPageNumbers)
+        // A custom label (e.g. an auto-detected document name) is drawn instead of the page number, and
+        // forces the labelled drawing path even when page numbers are otherwise turned off.
+        string? customLabel = e.Item.Tag is T tagItem
+            ? _behavior.GetPageLabel(tagItem, e.ItemIndex, _view.Items.Count)
+            : null;
+        if (_behavior.ShowPageNumbers || customLabel != null)
         {
             int tp = (int) Math.Round(PageNumberTextPadding * _dpiScale);
             int sp = (int) Math.Round(PageNumberSelectionPadding * _dpiScale);
@@ -101,7 +106,7 @@ public class WinFormsListView<T> : IListView<T> where T : notnull
             // When page numbers are shown, we use a completely different drawing path, as we need to offset the image
             // to have room for the page numbers, and the selection rectangle has a completely different style to
             // encompass the page numbers too.
-            string label = $"{e.ItemIndex + 1} / {_view.Items.Count}";
+            string label = customLabel ?? $"{e.ItemIndex + 1} / {_view.Items.Count}";
             SizeF textSize = TextRenderer.MeasureText(label, _view.Font);
             int textOffset = (int) (textSize.Height + tp);
 
