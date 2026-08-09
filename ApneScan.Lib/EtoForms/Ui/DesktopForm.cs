@@ -141,24 +141,40 @@ public abstract class DesktopForm : EtoFormBase
             ? C.None()
             : Safe(() => _sidebar.CreateBar(this));
 
-        // Main area: scan bar on top, then [files browser | scanned pages | preview].
-        var mainArea = L.Column(
-            scanBar,
-            L.Row(
-                Safe(CreateFilesPanel),
-                L.Overlay(
-                    // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
-                    _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
-                    L.Column(
-                        C.Filler(),
-                        L.Row(
-                            GetControlButtons(),
-                            C.Filler(),
-                            _notificationArea.Content)
-                    ).Padding(8)
-                ).Scale()
-            ).Scale()
+        // The scanned pages area (fills whatever space the side panels don't take).
+        var scannedPages = L.Overlay(
+            // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
+            _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
+            L.Column(
+                C.Filler(),
+                L.Row(
+                    GetControlButtons(),
+                    C.Filler(),
+                    _notificationArea.Content)
+            ).Padding(8)
         );
+
+        // Build the files browser (this also creates the preview panel into _previewPaneElement).
+        var filesBrowser = Safe(CreateFilesPanel);
+        var previewPane = _previewPaneElement ?? C.None();
+
+        // Each side panel is a resizable, drag-to-size splitter that collapses (no reserved space)
+        // when hidden. Left to right: [nav] [files browser] [preview] [scanned pages].
+        var previewAndPages = L.LeftPanel(previewPane, scannedPages)
+            .Collapsible(_previewVis)
+            .SizeConfig(
+                () => Config.Get(c => c.PreviewPanelWidth),
+                width => Config.User.Set(c => c.PreviewPanelWidth, width),
+                140);
+
+        var browserAndRest = L.LeftPanel(filesBrowser, previewAndPages)
+            .Collapsible(_filesPanelVis)
+            .SizeConfig(
+                () => Config.Get(c => c.FilesPanelWidth),
+                width => Config.User.Set(c => c.FilesPanelWidth, width),
+                160);
+
+        var mainArea = L.Column(scanBar, browserAndRest.Scale());
 
         // Left navigation sidebar in the proven resizable left panel.
         LayoutController.Content = L.LeftPanel(
@@ -294,12 +310,15 @@ public abstract class DesktopForm : EtoFormBase
         {
             if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
         }) { Text = "Open" };
-        var previewPane = L.Column(
-            C.Label("Preview").Width(300),
+        // The preview is a separate, independently-resizable panel (built here so its controls exist).
+        _previewPaneElement = L.Column(
+            C.Label("Preview"),
             new Scrollable { Content = _previewImage }.Scale(),
             _previewLabel,
             C.Button(openCmd)
         ).Padding(6).Visible(_previewVis);
+        // The browser itself: toolbar + path + file list. It fills its splitter panel so the user can
+        // drag it wider or narrower.
         return L.Column(
             L.Row(
                 C.Button(upCommand).Width(36),
@@ -310,12 +329,12 @@ public abstract class DesktopForm : EtoFormBase
                 C.Filler()
             ),
             _filesPathLabel,
-            L.Row(
-                _filesGrid.Width(250),
-                previewPane
-            ).Scale()
+            _filesGrid.Scale()
         ).Padding(4).Visible(_filesPanelVis);
     }
+
+    // The preview panel, built inside CreateFilesPanel; laid out as its own resizable splitter panel.
+    private LayoutElement? _previewPaneElement;
 
     // "Open" — browse any folder inside the My Files panel.
     private void OpenFolderInBrowser()
@@ -386,10 +405,11 @@ public abstract class DesktopForm : EtoFormBase
 
     private void ShowMyDocuments()
     {
-        // Toggle: clicking My Documents again closes the in-app file panel.
+        // Toggle: clicking My Documents again closes the in-app file panel (and its preview).
         if (_filesPanelVis.IsVisible)
         {
             _filesPanelVis.IsVisible = false;
+            _previewVis.IsVisible = false;
             return;
         }
         LoadFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));

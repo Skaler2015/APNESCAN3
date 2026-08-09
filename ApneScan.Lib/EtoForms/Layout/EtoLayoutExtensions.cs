@@ -252,6 +252,13 @@ public static class EtoLayoutExtensions
     public static LayoutOverlay Scale(this LayoutOverlay overlay) =>
         new LayoutOverlay(overlay, scale: true);
 
+    // LayoutLeftPanel keeps splitter state so it can't be copy-constructed; set Scale in place instead.
+    public static LayoutLeftPanel Scale(this LayoutLeftPanel panel)
+    {
+        panel.Scale = true;
+        return panel;
+    }
+
     public static LayoutElement Expand(this IEnumerable<LayoutElement> elements) =>
         new ExpandLayoutElement(elements.ToArray());
 

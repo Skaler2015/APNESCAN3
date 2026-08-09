@@ -15,6 +15,9 @@ public class LayoutLeftPanel : LayoutContainer
     private bool _isInitialized;
     private bool _inLayout;
     private float _lastScale;
+    private LayoutVisibility? _collapseVisibility;
+    private bool _collapseSubscribed;
+    private bool _wasCollapsed;
 
     public LayoutLeftPanel(LayoutElement left, LayoutElement right) : base([left, right])
     {
@@ -36,6 +39,25 @@ public class LayoutLeftPanel : LayoutContainer
 
     public override void DoLayout(LayoutContext context, RectangleF bounds)
     {
+        // When the left panel is collapsible and currently hidden, give all the space to the right
+        // panel (position 0) instead of reserving the splitter width, so nothing gets squeezed.
+        if (_collapseVisibility != null && !_collapseSubscribed)
+        {
+            _collapseVisibility.IsVisibleChanged += (_, _) => context.Invalidate();
+            _collapseSubscribed = true;
+        }
+        if (_collapseVisibility is { IsVisible: false })
+        {
+            _inLayout = true;
+            Splitter.Panel1MinimumSize = 0;
+            EtoPlatform.Current.SetSplitterPosition(Splitter, 0);
+            _inLayout = false;
+            _left.Width = 0;
+            _wasCollapsed = true;
+            _overlay.DoLayout(context, bounds);
+            return;
+        }
+
         var w = _minWidth.HasValue ? (int) (_minWidth * context.Scale) : MeasureWidth(context, bounds, _left);
         if (Splitter.Position < w)
         {
@@ -46,8 +68,9 @@ public class LayoutLeftPanel : LayoutContainer
         Splitter.Panel2MinimumSize = (int) (100 * context.Scale);
 
         // ReSharper disable once CompareOfFloatsByEqualityOperator
-        if (!_isInitialized || context.Scale != _lastScale)
+        if (!_isInitialized || context.Scale != _lastScale || _wasCollapsed)
         {
+            _wasCollapsed = false;
             _lastScale = context.Scale;
             int initialWidth = Math.Max((int) (_widthGetter() * context.Scale), w);
             _inLayout = true;
@@ -99,6 +122,17 @@ public class LayoutLeftPanel : LayoutContainer
         _widthGetter = getter;
         _widthSetter = setter;
         _minWidth = minWidth;
+        return this;
+    }
+
+    /// <summary>
+    /// Makes the left panel collapse to zero width (handing all space to the right panel) whenever the
+    /// given visibility is hidden, and restore its configured width when shown again. Used so a hidden
+    /// side panel doesn't reserve splitter space.
+    /// </summary>
+    public LayoutLeftPanel Collapsible(LayoutVisibility visibility)
+    {
+        _collapseVisibility = visibility;
         return this;
     }
 }
