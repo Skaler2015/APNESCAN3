@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0</TargetFrameworks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX'))">MAC</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux'))">LINUX</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows'))">WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+  <Import Project="..\ApneScan.Setup\targets\SdkUsers.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\ApneScan.Sdk\ApneScan.Sdk.csproj" />
+    <ProjectReference Include="..\ApneScan.Images.Gdi\ApneScan.Images.Gdi.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <ProjectReference Include="..\ApneScan.Images.Wpf\ApneScan.Images.Wpf.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <ProjectReference Include="..\ApneScan.Images.Mac\ApneScan.Images.Mac.csproj" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <ProjectReference Include="..\ApneScan.Images.Gtk\ApneScan.Images.Gtk.csproj" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+    <ProjectReference Include="..\ApneScan.Images.ImageSharp\ApneScan.Images.ImageSharp.csproj" />
+    <ProjectReference Include="..\ApneScan.Escl.Server\ApneScan.Escl.Server.csproj" />
+
+    <PackageReference Include="NAPS2.Pdfium.Binaries" Version="1.3.0" />
+    <PackageReference Include="NAPS2.Tesseract.Binaries" Version="1.4.0" />
+    <PackageReference Include="IsExternalInit" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="NSubstitute" Version="6.0.0" />
+    <PackageReference Include="PdfAValidator" Version="2.1.109" />
+    <PackageReference Include="System.Linq.Async" Version="7.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.Lib.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ApneScan.App.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="**/*.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="TestImageContextFactory.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+  
+</Project>

@@ -1,0 +1,10 @@
+using CommandLine;
+
+namespace ApneScan.Tools.Project;
+
+[Verb("doc", HelpText = "Docfx control")]
+public class DocOptions : OptionsBase
+{
+    [Value(0, MetaName = "doc command", Required = true, HelpText = "build|serve|push")]
+    public string? DocCommand { get; set; }
+}

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFrameworks>
+        <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0</TargetFrameworks>
+        <RootNamespace>ApneScan.Sdk.ScannerTests</RootNamespace>
+    </PropertyGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+    <Import Project="..\ApneScan.Setup\targets\NativeLibs.targets" />
+    <Import Project="..\ApneScan.Setup\targets\SdkUsers.targets" />
+
+    <ItemGroup>
+        <ProjectReference Include="..\ApneScan.Sdk.Tests\ApneScan.Sdk.Tests.csproj" />
+
+        <PackageReference Include="NAPS2.Sane.Binaries" Version="1.2.1" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+        <PackageReference Include="NSubstitute" Version="6.0.0" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+</Project>

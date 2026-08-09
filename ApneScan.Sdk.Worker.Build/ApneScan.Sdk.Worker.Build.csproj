@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>WinExe</OutputType>
+        <LargeAddressAware>true</LargeAddressAware>
+        <RootNamespace>ApneScan.Sdk.Worker</RootNamespace>
+        <AssemblyName>ApneScan.Worker</AssemblyName>
+
+        <PlatformTarget>x86</PlatformTarget>
+
+        <Title>ApneScan.Sdk.Worker</Title>
+        <Product>ApneScan.Sdk.Worker</Product>
+        
+        <SelfContained>true</SelfContained>
+        <PublishSingleFile>true</PublishSingleFile>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>partial</TrimMode>
+        <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    </PropertyGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+
+    <ItemGroup>
+        <ProjectReference Include="..\ApneScan.Images.Gdi\ApneScan.Images.Gdi.csproj" />
+        <ProjectReference Include="..\ApneScan.Sdk\ApneScan.Sdk.csproj" />
+        <PackageReference Include="LargeAddressAware" Version="1.0.6" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="*.targets" />
+    </ItemGroup>
+</Project>

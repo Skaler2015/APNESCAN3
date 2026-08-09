@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8;net10.0;net462;netstandard2.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <CheckEolTargetFramework>false</CheckEolTargetFramework>
+        <RootNamespace>ApneScan.Images.Gdi</RootNamespace>
+
+        <Title>ApneScan.Images.Gdi</Title>
+        <Product>ApneScan.Images.Gdi</Product>
+        <Description>Images based on System.Drawing.Bitmap for ApneScan.Sdk.</Description>
+        <PackageTags>apnescan</PackageTags>
+    </PropertyGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\SdkPackageTargets.targets" />
+
+    <ItemGroup>
+        <ProjectReference Include="..\ApneScan.Images\ApneScan.Images.csproj" />
+        <PackageReference Include="System.Drawing.Common" Version="9.0.3" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>ApneScan.Sdk.Tests</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <Import Project="..\ApneScan.Setup\targets\CommonTargets.targets" />
+    <Import Project="..\ApneScan.Setup\targets\ImageUsers.targets" />
+
+</Project>

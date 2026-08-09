@@ -1,0 +1,27 @@
+﻿using ApneScan.EtoForms.Ui;
+using ApneScan.Scan;
+
+namespace ApneScan.EtoForms;
+
+public class EtoDevicePrompt : IDevicePrompt
+{
+    private readonly IFormFactory _formFactory;
+
+    public EtoDevicePrompt(IFormFactory formFactory)
+    {
+        _formFactory = formFactory;
+    }
+
+    public Task<DeviceChoice> PromptForDevice(ScanOptions options, bool allowAlwaysAsk)
+    {
+        // TODO: Extension method or something to turn InvokeGet into Task<T>?
+        return Task.FromResult(Invoker.Current.InvokeGet(() =>
+        {
+            var deviceForm = _formFactory.Create<ChooseDeviceForm>();
+            deviceForm.ScanOptions = options;
+            deviceForm.AllowAlwaysAsk = allowAlwaysAsk;
+            deviceForm.ShowModal();
+            return deviceForm.Choice;
+        }));
+    }
+}

@@ -1,0 +1,11 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+    <ItemGroup>
+        <Content Include="$(MSBuildThisFileDirectory)\..\contentFiles\ApneScan.Worker.exe"
+                 Condition="$(RuntimeIdentifier) == 'win-x86' or $(RuntimeIdentifier) == 'win-x64' or $(TargetFramework.StartsWith('net4')) or ($(RuntimeIdentifier) == '' and !$(TargetFramework.Contains('macos')))">
+            <Link>ApneScan.Worker.exe</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
+</Project>

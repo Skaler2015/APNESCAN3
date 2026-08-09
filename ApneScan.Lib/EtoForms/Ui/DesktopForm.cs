@@ -1,0 +1,1571 @@
+using System.Collections.Immutable;
+using System.ComponentModel;
+using System.Threading;
+using Eto.Drawing;
+using Eto.Forms;
+using ApneScan.EtoForms.Desktop;
+using ApneScan.EtoForms.Layout;
+using ApneScan.EtoForms.Notifications;
+using ApneScan.EtoForms.Widgets;
+using ApneScan.ImportExport.Images;
+using ApneScan.Scan;
+
+namespace ApneScan.EtoForms.Ui;
+
+public abstract class DesktopForm : EtoFormBase
+{
+    private readonly DesktopKeyboardShortcuts _keyboardShortcuts;
+    private readonly NotificationManager _notificationManager;
+    private readonly CultureHelper _cultureHelper;
+    protected readonly ColorScheme _colorScheme;
+    protected readonly IProfileManager _profileManager;
+    protected readonly ThumbnailController _thumbnailController;
+    private readonly UiThumbnailProvider _thumbnailProvider;
+    protected readonly DesktopController _desktopController;
+    protected readonly IDesktopScanController _desktopScanController;
+    private readonly ImageListActions _imageListActions;
+    private readonly DesktopFormProvider _desktopFormProvider;
+    private readonly IDesktopSubFormController _desktopSubFormController;
+    private readonly ImageTransfer _imageTransfer = new();
+    private readonly Lazy<DesktopCommands> _commands;
+    private readonly Sidebar _sidebar;
+    protected readonly IIconProvider _iconProvider;
+
+    protected readonly ListProvider<Command> _scanMenuCommands = new();
+    private readonly ListProvider<Command> _languageMenuCommands = new();
+    protected readonly ListProvider<Command> _editWithCommands = new();
+    private readonly ContextMenu _contextMenu = new();
+
+    private readonly NotificationArea _notificationArea;
+    protected IListView<UiImage> _listView;
+    private ImageListSyncer? _imageListSyncer;
+
+    public DesktopForm(
+        ApneScanConfig config,
+        DesktopKeyboardShortcuts keyboardShortcuts,
+        NotificationManager notificationManager,
+        CultureHelper cultureHelper,
+        ColorScheme colorScheme,
+        IProfileManager profileManager,
+        UiImageList imageList,
+        ThumbnailController thumbnailController,
+        UiThumbnailProvider thumbnailProvider,
+        DesktopController desktopController,
+        IDesktopScanController desktopScanController,
+        ImageListActions imageListActions,
+        ImageListViewBehavior imageListViewBehavior,
+        DesktopFormProvider desktopFormProvider,
+        IDesktopSubFormController desktopSubFormController,
+        Lazy<DesktopCommands> commands,
+        Sidebar sidebar,
+        IIconProvider iconProvider) : base(config)
+    {
+        Icon = EtoPlatform.Current.IsGtk ? new Icon(1f, Icons.scanner_128.ToEtoImage()) : Icons.favicon.ToEtoIcon();
+
+        _keyboardShortcuts = keyboardShortcuts;
+        _notificationManager = notificationManager;
+        _cultureHelper = cultureHelper;
+        _colorScheme = colorScheme;
+        _profileManager = profileManager;
+        ImageList = imageList;
+        _thumbnailController = thumbnailController;
+        _thumbnailProvider = thumbnailProvider;
+        _desktopController = desktopController;
+        _desktopScanController = desktopScanController;
+        _imageListActions = imageListActions;
+        _desktopFormProvider = desktopFormProvider;
+        _desktopSubFormController = desktopSubFormController;
+        _sidebar = sidebar;
+        _iconProvider = iconProvider;
+        _commands = commands;
+
+        _desktopFormProvider.DesktopForm = this;
+        // Rename is context-sensitive (My Files vs scanned pages), so provide its behaviour here.
+        Commands.RenameAction = PerformRename;
+        _keyboardShortcuts.Assign(Commands);
+        CreateToolbarsAndMenus();
+        UpdateScanButton();
+        EditWithAppChanged();
+        UpdateProfilesToolbar();
+        InitLanguageDropdown();
+
+        // Show each page's own auto-detected document name beneath it (instead of "1 / 2").
+        imageListViewBehavior.PageLabelProvider =
+            (img, _, _) => _pageNames.TryGetValue(img, out var n) ? n : null;
+        _listView = EtoPlatform.Current.CreateListView(imageListViewBehavior);
+        _listView.Selection = ImageList.Selection;
+        _listView.ItemClicked += ListViewItemClicked;
+        _listView.Drop += ListViewDrop;
+        _listView.SelectionChanged += ListViewSelectionChanged;
+        _listView.ImageSize = new Size(_thumbnailController.VisibleSize, _thumbnailController.VisibleSize);
+        _listView.ContextMenu = _contextMenu;
+
+        // TODO: Fix Eto so that we don't need to set an item here (otherwise the first time we right click nothing happens)
+        _contextMenu.Items.Add(Commands.SelectAll);
+        _contextMenu.Opening += OpeningContextMenu;
+        EtoPlatform.Current.AttachMouseWheelEvent(_listView.Control, ListViewMouseWheel);
+        EtoPlatform.Current.AttachMouseMoveEvent(_listView.Control, ListViewMouseMove);
+        // Escape closes the My Files panel (and its preview) if it's open; otherwise normal shortcuts.
+        EtoPlatform.Current.HandleKeyDown(this, key =>
+        {
+            if (key == Keys.Escape && _filesPanelVis.IsVisible)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
+                return true;
+            }
+            return _keyboardShortcuts.Perform(key);
+        });
+        // In the scanned pages area, Escape closes My Files; all other keys (including the configurable
+        // Rename shortcut, F2 by default) go through the normal keyboard shortcuts.
+        EtoPlatform.Current.HandleKeyDown(_listView.Control, key =>
+        {
+            if (key == Keys.Escape && _filesPanelVis.IsVisible)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
+                return true;
+            }
+            return _keyboardShortcuts.Perform(key);
+        });
+
+        //
+        // Shown += FDesktop_Shown;
+        // Closing += FDesktop_Closing;
+        // Closed += FDesktop_Closed;
+        _thumbnailController.ListView = _listView;
+        _thumbnailController.ThumbnailSizeChanged += ThumbnailController_ThumbnailSizeChanged;
+        EtoPlatform.Current.AttachDpiDependency(this, scale => _thumbnailController.Oversample = scale);
+        ImageList.SelectionChanged += ImageList_SelectionChanged;
+        ImageList.ImagesUpdated += ImageList_ImagesUpdated;
+        ImageList.ImagesThumbnailInvalidated += ImageList_ImagesThumbnailInvalidated;
+        _profileManager.ProfilesUpdated += ProfileManager_ProfilesUpdated;
+        _notificationArea = new NotificationArea(_notificationManager, LayoutController);
+    }
+
+    protected override void BuildLayout()
+    {
+        FormStateController.AutoLayoutSize = false;
+        FormStateController.DefaultClientSize = new Size(1210, 600);
+        EtoPlatform.Current.AttachDpiDependency(this, _ =>
+            MinimumSize = Size.Round(new SizeF(600, 300) * EtoPlatform.Current.GetLayoutScaleFactor(this)));
+
+        LayoutController.RootPadding = 0;
+
+        // Scan settings as a horizontal bar just below the toolbar.
+        var scanBar = Config.Get(c => c.HiddenButtons).HasFlag(ToolbarButtons.Sidebar)
+            ? C.None()
+            : Safe(() => _sidebar.CreateBar(this));
+
+        // The scanned pages area (fills whatever space the side panels don't take).
+        var scannedPages = L.Overlay(
+            // For WinForms, we add 1px of top padding to give us room to draw a border above the listview
+            _listView.Control.Padding(top: EtoPlatform.Current.IsWinForms ? 1 : 0),
+            L.Column(
+                C.Filler(),
+                L.Row(
+                    GetControlButtons(),
+                    C.Filler(),
+                    _notificationArea.Content)
+            ).Padding(8)
+        );
+
+        // Build the files browser (this also creates the preview panel into _previewPaneElement).
+        var filesBrowser = Safe(CreateFilesPanel);
+        var previewPane = _previewPaneElement ?? C.None();
+
+        // Each side panel is a resizable, drag-to-size splitter that collapses (no reserved space)
+        // when hidden. Left to right: [nav] [files browser] [scanned pages] [preview].
+        var browserAndPages = L.LeftPanel(filesBrowser, scannedPages)
+            .Collapsible(_filesPanelVis)
+            .SizeConfig(
+                () => Config.Get(c => c.FilesPanelWidth),
+                width => Config.User.Set(c => c.FilesPanelWidth, width),
+                180);
+
+        // The preview is docked on the far right (fixed/resizable), the rest fills to its left.
+        var bodyWithPreview = L.LeftPanel(browserAndPages, previewPane)
+            .FixRight()
+            .Collapsible(_previewVis)
+            .SizeConfig(
+                () => Config.Get(c => c.PreviewPanelWidth),
+                width => Config.User.Set(c => c.PreviewPanelWidth, width),
+                160);
+
+        var mainArea = L.Column(scanBar, bodyWithPreview.Scale());
+
+        // Left navigation sidebar in the proven resizable left panel.
+        LayoutController.Content = L.LeftPanel(
+            Safe(CreateNavSidebar),
+            mainArea
+        ).SizeConfig(
+            () => Config.Get(c => c.SidebarWidth),
+            width => Config.User.Set(c => c.SidebarWidth, width),
+            190);
+    }
+
+    // Builds a layout piece defensively: if it throws, the app still opens (that piece is just
+    // omitted) and the error is logged to %AppData%\ApneScan\startup-error.log.
+    private LayoutElement Safe(Func<LayoutElement> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+            return C.None();
+        }
+    }
+
+    private static void LogUiError(Exception ex)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ApneScan");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "startup-error.log"),
+                $"{DateTime.Now:u} [UI] {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    // A simple left navigation sidebar with working options (reusing existing commands),
+    // including a "My Documents" shortcut that opens the user's Documents folder.
+    private LayoutElement CreateNavSidebar()
+    {
+        var myDocuments = new ActionCommand(ShowMyDocuments) { Text = "My Files" };
+        var addFav = new ActionCommand(AddFavourite) { Text = "＋ Add folder to Favourites" };
+        _favStack = new StackLayout
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
+        };
+        RefreshFavourites();
+        var keyboardShortcutsCmd = new ActionCommand(ShowKeyboardShortcuts) { Text = "Keyboard shortcuts" };
+        var checkUpdatesCmd = new ActionCommand(CheckForUpdatesFromSidebar) { Text = "Check for updates" };
+        // Holds the "update available / up to date" notice shown directly under Check for updates.
+        _updateStack = new StackLayout
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            // Never leave this empty - an empty StackLayout breaks Eto's WinForms layout on load.
+            Items = { new Label { Text = "" } }
+        };
+        return L.Column(
+            C.Label("WORKSPACE"),
+            NavButton(Commands.Scan),
+            NavButton(myDocuments),
+            _favStack,
+            NavButton(addFav),
+            NavButton(Commands.Import),
+            C.Spacer(),
+            C.Label("LIBRARY"),
+            NavButton(Commands.Profiles),
+            C.Spacer(),
+            C.Label("SYSTEM"),
+            NavButton(Commands.Settings),
+            NavButton(keyboardShortcutsCmd),
+            NavButton(checkUpdatesCmd),
+            _updateStack,
+            NavButton(Commands.About),
+            C.Filler()
+        ).Padding(8);
+    }
+
+    private void ShowKeyboardShortcuts()
+    {
+        try
+        {
+            FormFactory.Create<KeyboardShortcutsForm>().ShowModal();
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // ---- Check for updates from the sidebar, with an inline "update available" action ----
+
+    private StackLayout? _updateStack;
+
+    private async void CheckForUpdatesFromSidebar()
+    {
+        SetUpdateNotice("Checking for updates…", null);
+        try
+        {
+            var update = await _desktopController.CheckForUpdatesFromUi();
+            if (update is { } available)
+            {
+                SetUpdateNotice($"⬆ Update available: {available.Name}\nClick here to update",
+                    () => _desktopController.StartUpdate(available));
+            }
+            else
+            {
+                SetUpdateNotice("✓ You're on the latest version", null);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+            SetUpdateNotice("Update check failed — try again", null);
+        }
+    }
+
+    // Shows a message just below "Check for updates". If onClick is set, it's a clickable update button.
+    private void SetUpdateNotice(string text, Action? onClick)
+    {
+        if (_updateStack == null) return;
+        _updateStack.Items.Clear();
+        if (onClick != null)
+        {
+            var link = new LinkButton { Text = text };
+            link.Click += (_, _) => onClick();
+            _updateStack.Items.Add(link);
+        }
+        else
+        {
+            _updateStack.Items.Add(new Label { Text = text });
+        }
+    }
+
+    private LayoutControl NavButton(ActionCommand command) =>
+        C.Button(command, ButtonImagePosition.Left).AlignLeading().Width(180);
+
+    private GridView? _filesGrid;
+    private Label? _filesPathLabel;
+    private TextBox? _filesSearch;
+    private List<FileSystemInfo> _currentEntries = new();
+    private readonly LayoutVisibility _filesPanelVis = new(false);
+    private string _currentFolder = "";
+
+    // An in-app file browser panel shown right next to the navigation sidebar. Opened by the
+    // "My Documents" nav item; lets the user browse folders and open files without leaving the app.
+    private LayoutElement CreateFilesPanel()
+    {
+        _filesGrid = new GridView
+        {
+            Width = 240,
+            ShowHeader = false,
+            Columns =
+            {
+                new GridColumn
+                {
+                    DataCell = new TextBoxCell
+                        { Binding = new DelegateBinding<FileSystemInfo, string>(GetEntryLabel) },
+                    Width = 228
+                }
+            }
+        };
+        _filesGrid.AllowMultipleSelection = true;
+        _filesGrid.CellDoubleClick += FilesEntryActivated;
+        _filesGrid.SelectionChanged += (_, _) => UpdatePreview(_filesGrid?.SelectedItem as FileSystemInfo);
+        // Allow dragging a file out of the browser (e.g. onto the pages area) to import it.
+        EtoPlatform.Current.AttachMouseMoveEvent(_filesGrid, FilesGridMouseMove);
+        // F2 to rename; right-click for rename / batch rename.
+        _filesGrid.KeyDown += (_, e) =>
+        {
+            if (e.Key == Keys.F2)
+            {
+                RenameSelected();
+                e.Handled = true;
+            }
+            else if (e.Key == Keys.Escape)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
+                e.Handled = true;
+            }
+        };
+        var renameItem = new ButtonMenuItem { Text = "Rename (F2)" };
+        renameItem.Click += (_, _) => RenameSelected();
+        var batchItem = new ButtonMenuItem { Text = "Batch rename…" };
+        batchItem.Click += (_, _) => BatchRename();
+        var cm = new ContextMenu();
+        cm.Items.Add(renameItem);
+        cm.Items.Add(batchItem);
+        _filesGrid.ContextMenu = cm;
+        _filesPathLabel = new Label { Text = "" };
+        // Fast in-folder search: filters the open folder as you type (Esc clears / closes).
+        _filesSearch = new TextBox { PlaceholderText = "🔍 Search this folder…" };
+        _filesSearch.TextChanged += (_, _) => ApplyFileFilter();
+        _filesSearch.KeyDown += (_, e) =>
+        {
+            if (e.Key == Keys.Escape)
+            {
+                if (_filesSearch.Text.Length > 0)
+                {
+                    _filesSearch.Text = "";
+                }
+                else
+                {
+                    _filesPanelVis.IsVisible = false;
+                    _previewVis.IsVisible = false;
+                }
+                e.Handled = true;
+            }
+        };
+        var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
+        var openCommand = new ActionCommand(OpenFolderInBrowser) { Text = "Open" };
+        var importCommand = new ActionCommand(ImportFolder) { Text = "Import" };
+        var newCommand = new ActionCommand(NewFolder) { Text = "New" };
+        var favCommand = new ActionCommand(FavouriteCurrentOrSelected) { Text = "★ Favourite" };
+        // Preview is a separate, independently-resizable panel. It draws the selected image scaled to
+        // fit the panel, so resizing the panel makes the preview grow/shrink to match (no scrollbars).
+        _previewDrawable = new Drawable { BackgroundColor = Colors.Transparent };
+        _previewDrawable.Paint += PaintPreview;
+        _previewDrawable.SizeChanged += (_, _) => _previewDrawable?.Invalidate();
+        // Scroll the wheel over the preview to page through a multi-page PDF.
+        EtoPlatform.Current.AttachMouseWheelEvent(_previewDrawable, PreviewMouseWheel);
+        _previewLabel = new Label { Text = "" };
+        var openCmd = new ActionCommand(() =>
+        {
+            if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
+        }) { Text = "Open" };
+        _previewPaneElement = L.Column(
+            C.Label("Preview"),
+            _previewDrawable.Scale(),
+            _previewLabel,
+            C.Button(openCmd)
+        ).Padding(6).Visible(_previewVis);
+        // The browser itself: toolbar + path + search + file list. It fills its splitter panel so the
+        // user can drag it wider or narrower. The toolbar is split across two rows so every button stays
+        // fully visible even when the panel is narrow.
+        return L.Column(
+            L.Row(
+                C.Button(upCommand).Width(36),
+                C.Button(openCommand).Scale(),
+                C.Button(importCommand).Scale()
+            ),
+            L.Row(
+                C.Button(newCommand).Scale(),
+                C.Button(favCommand).Scale()
+            ),
+            _filesPathLabel,
+            _filesSearch,
+            _filesGrid.Scale()
+        ).Padding(4).Visible(_filesPanelVis);
+    }
+
+    // The preview panel, built inside CreateFilesPanel; laid out as its own resizable splitter panel.
+    private LayoutElement? _previewPaneElement;
+
+    // "Open" — browse any folder inside the My Files panel.
+    private void OpenFolderInBrowser()
+    {
+        var dlg = new SelectFolderDialog();
+        if (dlg.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dlg.Directory))
+        {
+            LoadFolder(dlg.Directory);
+            _filesPanelVis.IsVisible = true;
+        }
+    }
+
+    // "Import" — pick a folder and import all its files into the scanned pages.
+    private void ImportFolder()
+    {
+        var dlg = new SelectFolderDialog();
+        if (dlg.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dlg.Directory))
+        {
+            try
+            {
+                var files = Directory.GetFiles(dlg.Directory).OrderBy(f => f).ToList();
+                if (files.Count > 0)
+                {
+                    _desktopController.ImportFiles(files);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUiError(ex);
+            }
+        }
+    }
+
+    // "New" — create a new folder inside the folder currently open in the browser.
+    private void NewFolder()
+    {
+        if (string.IsNullOrEmpty(_currentFolder)) return;
+        var name = PromptForText("New folder name", "New Folder");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(_currentFolder, name));
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // "★ Favourite" — pin the selected folder (or the current one) to Favourites.
+    private void FavouriteCurrentOrSelected()
+    {
+        var folder = (_filesGrid?.SelectedItem as DirectoryInfo)?.FullName
+                     ?? (string.IsNullOrEmpty(_currentFolder) ? null : _currentFolder);
+        if (folder == null) return;
+        var favs = LoadFavourites();
+        if (!favs.Contains(folder))
+        {
+            favs.Add(folder);
+            try { File.WriteAllLines(FavouritesFile, favs); } catch { /* ignore */ }
+            RefreshFavourites();
+        }
+    }
+
+    private static string GetEntryLabel(FileSystemInfo entry) =>
+        entry is DirectoryInfo ? "📁 " + entry.Name : entry.Name;
+
+    private void ShowMyDocuments()
+    {
+        // Toggle: clicking My Documents again closes the in-app file panel (and its preview).
+        if (_filesPanelVis.IsVisible)
+        {
+            _filesPanelVis.IsVisible = false;
+            _previewVis.IsVisible = false;
+            return;
+        }
+        LoadFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        _filesPanelVis.IsVisible = true;
+    }
+
+    private void LoadFolder(string folder)
+    {
+        _currentFolder = folder;
+        if (_filesPathLabel != null) _filesPathLabel.Text = folder;
+        var entries = new List<FileSystemInfo>();
+        try
+        {
+            var dir = new DirectoryInfo(folder);
+            entries.AddRange(dir.GetDirectories().OrderBy(d => d.Name));
+            entries.AddRange(dir.GetFiles().OrderBy(f => f.Name));
+        }
+        catch (Exception)
+        {
+            // Ignore folders we can't read.
+        }
+        _currentEntries = entries;
+        // Reset the search box when moving to a new folder.
+        if (_filesSearch != null && _filesSearch.Text.Length > 0) _filesSearch.Text = "";
+        ApplyFileFilter();
+    }
+
+    // Filters the currently open folder by the search text (name contains, case-insensitive). This is a
+    // fast in-memory filter over the already-listed entries - it never re-reads the disk.
+    private void ApplyFileFilter()
+    {
+        if (_filesGrid == null) return;
+        var query = _filesSearch?.Text?.Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            _filesGrid.DataStore = _currentEntries;
+            return;
+        }
+        _filesGrid.DataStore = _currentEntries
+            .Where(e => e.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private void GoUpFolder()
+    {
+        var parent = Directory.GetParent(_currentFolder);
+        if (parent != null) LoadFolder(parent.FullName);
+    }
+
+    private void FilesEntryActivated(object? sender, EventArgs e)
+    {
+        switch (_filesGrid?.SelectedItem)
+        {
+            case DirectoryInfo dir:
+                LoadFolder(dir.FullName);
+                break;
+            case FileInfo file:
+                ApneScan.Util.ProcessHelper.OpenFile(file.FullName);
+                break;
+        }
+    }
+
+    private bool _fileDragActive;
+
+    // Start a drag when the user drags a file row out of the browser. The pages area (and the
+    // OS) accept a file drop and import it via the existing drop handler.
+    private void FilesGridMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (_fileDragActive) return;
+        if (!e.Buttons.HasFlag(MouseButtons.Primary)) return;
+        if (_filesGrid?.SelectedItem is not FileInfo file) return;
+        try
+        {
+            _fileDragActive = true;
+            var data = new DataObject();
+            data.Uris = new[] { new Uri(file.FullName) };
+            _filesGrid.DoDragDrop(data, DragEffects.Copy);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+        finally
+        {
+            _fileDragActive = false;
+        }
+    }
+
+    // ---- Rename: F2 (single) and batch rename in the My Files browser ----
+
+    private void RenameSelected()
+    {
+        if (_filesGrid?.SelectedItem is not FileSystemInfo entry) return;
+        var newName = PromptForText("Rename", entry.Name);
+        if (string.IsNullOrWhiteSpace(newName) || newName == entry.Name) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(entry.FullName)!;
+            var target = Path.Combine(dir, newName);
+            if (entry is DirectoryInfo)
+            {
+                Directory.Move(entry.FullName, target);
+            }
+            else
+            {
+                File.Move(entry.FullName, target);
+            }
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    private void BatchRename()
+    {
+        var selected = _filesGrid?.SelectedItems?.OfType<FileInfo>().ToList() ?? new List<FileInfo>();
+        if (selected.Count == 0) return;
+        var baseName = PromptForText($"Batch rename {selected.Count} file(s) — base name", "Document");
+        if (string.IsNullOrWhiteSpace(baseName)) return;
+        try
+        {
+            int i = 1;
+            foreach (var f in selected.OrderBy(x => x.Name))
+            {
+                var target = Path.Combine(Path.GetDirectoryName(f.FullName)!, $"{baseName} ({i}){f.Extension}");
+                if (!File.Exists(target))
+                {
+                    File.Move(f.FullName, target);
+                }
+                i++;
+            }
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // Minimal text-input dialog (Eto has no built-in input box).
+    private string? PromptForText(string title, string initial)
+    {
+        string? result = null;
+        var dlg = new Dialog { Title = title, Resizable = false };
+        var tb = new TextBox { Text = initial, Width = 320 };
+        var ok = new Button { Text = "OK" };
+        ok.Click += (_, _) => { result = tb.Text; dlg.Close(); };
+        var cancel = new Button { Text = "Cancel" };
+        cancel.Click += (_, _) => { result = null; dlg.Close(); };
+        dlg.DefaultButton = ok;
+        dlg.AbortButton = cancel;
+        dlg.Content = new StackLayout
+        {
+            Padding = 12,
+            Spacing = 10,
+            Items =
+            {
+                tb,
+                new StackLayout
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Items = { ok, cancel }
+                }
+            }
+        };
+        dlg.ShowModal(this);
+        return result;
+    }
+
+    // ---- Favourites: folders the user pins, stored in %AppData%\ApneScan\favourites.txt ----
+
+    private StackLayout? _favStack;
+
+    private static string FavouritesFile => Path.Combine(Paths.AppData, "favourites.txt");
+
+    private List<string> LoadFavourites()
+    {
+        try
+        {
+            return File.Exists(FavouritesFile)
+                ? File.ReadAllLines(FavouritesFile).Where(x => !string.IsNullOrWhiteSpace(x)).ToList()
+                : new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private void RefreshFavourites()
+    {
+        if (_favStack == null) return;
+        _favStack.Items.Clear();
+        var favs = LoadFavourites();
+        // An empty StackLayout crashes Eto's WinForms layout on load, so always keep one item.
+        if (favs.Count == 0)
+        {
+            _favStack.Items.Add(new Label
+            {
+                Text = "(no favourites yet)",
+                TextColor = Colors.Gray,
+                Font = SystemFonts.Default(7)
+            });
+            return;
+        }
+        foreach (var fav in favs)
+        {
+            var path = fav;
+            var name = Path.GetFileName(path.TrimEnd('\\', '/'));
+            if (string.IsNullOrEmpty(name)) name = path;
+            var btn = new Button { Text = "⭐ " + name, ToolTip = path };
+            btn.Click += (_, _) =>
+            {
+                LoadFolder(path);
+                _filesPanelVis.IsVisible = true;
+            };
+            _favStack.Items.Add(btn);
+        }
+    }
+
+    private void AddFavourite()
+    {
+        var dialog = new SelectFolderDialog();
+        if (dialog.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dialog.Directory))
+        {
+            var favs = LoadFavourites();
+            if (!favs.Contains(dialog.Directory))
+            {
+                favs.Add(dialog.Directory);
+                try { File.WriteAllLines(FavouritesFile, favs); } catch { /* ignore */ }
+                RefreshFavourites();
+            }
+            LoadFolder(dialog.Directory);
+            _filesPanelVis.IsVisible = true;
+        }
+    }
+
+    // ---- File preview: shows the selected file (image preview when possible). The controls are
+    // created inside CreateFilesPanel so the preview sits next to the file list. ----
+
+    private Drawable? _previewDrawable;
+    private Bitmap? _previewBitmap;
+    private Label? _previewLabel;
+    private string? _previewPath;
+    private string? _previewPdfPath;
+    private int _previewPdfPage;
+    private int _previewPdfPageCount;
+    private readonly LayoutVisibility _previewVis = new(false);
+
+    private void UpdatePreview(FileSystemInfo? entry)
+    {
+        if (_previewLabel == null) return;
+        if (entry is FileInfo file)
+        {
+            _previewPath = file.FullName;
+            _previewVis.IsVisible = true;
+            var ext = file.Extension.ToLowerInvariant();
+            if (ext == ".pdf")
+            {
+                // PDF preview: render page 1; the wheel scrolls through pages.
+                _previewPdfPath = file.FullName;
+                _previewPdfPage = 0;
+                _previewPdfPageCount = _desktopController.GetPdfPageCount(file.FullName);
+                RenderPreviewPdfPage();
+            }
+            else
+            {
+                _previewPdfPath = null;
+                _previewPdfPageCount = 0;
+                _previewLabel.Text = file.Name;
+                var old = _previewBitmap;
+                try
+                {
+                    _previewBitmap =
+                        ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
+                            ? new Bitmap(file.FullName)
+                            : null;
+                }
+                catch
+                {
+                    _previewBitmap = null;
+                }
+                old?.Dispose();
+                _previewDrawable?.Invalidate();
+            }
+        }
+        else
+        {
+            _previewVis.IsVisible = false;
+        }
+    }
+
+    // Renders the current PDF preview page and updates the label with the page position.
+    private void RenderPreviewPdfPage()
+    {
+        if (_previewPdfPath == null) return;
+        byte[]? bytes = _desktopController.RenderPdfPageToPng(_previewPdfPath, _previewPdfPage);
+        var old = _previewBitmap;
+        try
+        {
+            _previewBitmap = bytes != null ? new Bitmap(bytes) : null;
+        }
+        catch
+        {
+            _previewBitmap = null;
+        }
+        old?.Dispose();
+        if (_previewLabel != null)
+        {
+            var name = Path.GetFileName(_previewPdfPath);
+            _previewLabel.Text = _previewPdfPageCount > 1
+                ? $"{name}  ({_previewPdfPage + 1}/{_previewPdfPageCount})"
+                : name;
+        }
+        _previewDrawable?.Invalidate();
+    }
+
+    // Wheel over the preview pages through a multi-page PDF (up = previous, down = next).
+    private void PreviewMouseWheel(object? sender, MouseEventArgs e)
+    {
+        if (_previewPdfPath == null || _previewPdfPageCount <= 1) return;
+        int dir = e.Delta.Height > 0 ? -1 : 1;
+        int newPage = Math.Max(0, Math.Min(_previewPdfPageCount - 1, _previewPdfPage + dir));
+        if (newPage != _previewPdfPage)
+        {
+            _previewPdfPage = newPage;
+            RenderPreviewPdfPage();
+        }
+        e.Handled = true;
+    }
+
+    // Draws the current preview image scaled to fit the drawable, preserving aspect ratio and centered.
+    private void PaintPreview(object? sender, PaintEventArgs e)
+    {
+        var bmp = _previewBitmap;
+        if (bmp == null || _previewDrawable == null) return;
+        var area = _previewDrawable.Size;
+        if (area.Width <= 0 || area.Height <= 0 || bmp.Width <= 0 || bmp.Height <= 0) return;
+        float scale = Math.Min((float) area.Width / bmp.Width, (float) area.Height / bmp.Height);
+        float w = bmp.Width * scale;
+        float h = bmp.Height * scale;
+        float x = (area.Width - w) / 2;
+        float y = (area.Height - h) / 2;
+        e.Graphics.DrawImage(bmp, x, y, w, h);
+    }
+
+    private void OpeningContextMenu(object? sender, EventArgs e)
+    {
+        _contextMenu.Items.Clear();
+        if (!EtoPlatform.Current.IsMac)
+        {
+            // TODO: Can't do this on Mac yet as it disables the menu item indefinitely
+            Commands.Paste.Enabled = _imageTransfer.IsInClipboard() || Clipboard.Instance.ContainsImage;
+        }
+        if (ImageList.Selection.Any())
+        {
+            var autoName = new ButtonMenuItem { Text = "Auto-detect name (F2)" };
+            autoName.Click += (_, _) => NameScannedDocument(autoDetect: true);
+            var setName = new ButtonMenuItem { Text = "Set document name…" };
+            setName.Click += (_, _) => NameScannedDocument(autoDetect: false);
+            // TODO: Is this memory leaking (because of event handlers) when commands are converted to menuitems?
+            _contextMenu.Items.AddRange(
+            [
+                C.ButtonMenuItem(this, Commands.ViewImage),
+                new SeparatorMenuItem(),
+                autoName,
+                setName,
+                new SeparatorMenuItem(),
+                C.ButtonMenuItem(this, Commands.SelectAll),
+                C.ButtonMenuItem(this, Commands.Copy),
+                C.ButtonMenuItem(this, Commands.Paste),
+                new SeparatorMenuItem(),
+                C.ButtonMenuItem(this, Commands.Undo),
+                C.ButtonMenuItem(this, Commands.Redo),
+                new SeparatorMenuItem(),
+                C.ButtonMenuItem(this, Commands.Delete)
+            ]);
+        }
+        else
+        {
+            _contextMenu.Items.AddRange(
+            [
+                C.ButtonMenuItem(this, Commands.SelectAll),
+                C.ButtonMenuItem(this, Commands.Paste),
+                new SeparatorMenuItem(),
+                C.ButtonMenuItem(this, Commands.Undo),
+                C.ButtonMenuItem(this, Commands.Redo)
+            ]);
+        }
+    }
+
+    private void ImageList_SelectionChanged(object? sender, EventArgs e)
+    {
+        Invoker.Current.InvokeDispatch(() =>
+        {
+            UpdateToolbar();
+            _listView.Selection = ImageList.Selection;
+        });
+    }
+
+    private void ImageList_ImagesUpdated(object? sender, ImageListEventArgs e)
+    {
+        Invoker.Current.InvokeDispatch(() =>
+        {
+            UpdateToolbar();
+            DetectNamesForNewPages();
+        });
+    }
+
+    // Per-page auto document names (read from each page by offline OCR), shown beneath each thumbnail.
+    private readonly Dictionary<UiImage, string> _pageNames = new();
+    private bool _autoNameRunning;
+
+    // Reads each newly-added page with offline OCR and labels it with its own detected document name.
+    // Names are per page, so a batch of different documents gets a different name on each. Runs on the UI
+    // thread for the page bookkeeping; only the OCR itself runs in the background.
+    private void DetectNamesForNewPages()
+    {
+        // Drop names for pages that are no longer present.
+        var current = ImageList.Images.ToHashSet();
+        foreach (var key in _pageNames.Keys.Where(k => !current.Contains(k)).ToList())
+        {
+            _pageNames.Remove(key);
+        }
+        UpdateDefaultFileNameFromFirstPage();
+
+        if (_autoNameRunning)
+        {
+            return;
+        }
+        var pending = ImageList.Images.Where(img => !_pageNames.ContainsKey(img)).ToList();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+        _autoNameRunning = true;
+        Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var img in pending)
+                {
+                    string? name = null;
+                    try
+                    {
+                        name = await _desktopController.DetectDocumentName(img);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUiError(ex);
+                    }
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        continue;
+                    }
+                    var detected = name!.Trim();
+                    Invoker.Current.InvokeDispatch(() =>
+                    {
+                        // Only apply if the page is still present and hasn't been named in the meantime.
+                        if (ImageList.Images.Contains(img) && !_pageNames.ContainsKey(img))
+                        {
+                            _pageNames[img] = detected;
+                            _listView.Control.Invalidate();
+                            UpdateDefaultFileNameFromFirstPage();
+                        }
+                    });
+                }
+            }
+            finally
+            {
+                _autoNameRunning = false;
+            }
+        });
+    }
+
+    // The first page's name is used as the default save file name and window title (best-effort).
+    private string? FirstPageName()
+    {
+        var first = ImageList.Images.FirstOrDefault();
+        return first != null && _pageNames.TryGetValue(first, out var n) ? n : null;
+    }
+
+    private void UpdateDefaultFileNameFromFirstPage()
+    {
+        var name = FirstPageName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Config.Run.Remove(c => c.PdfSettings.DefaultFileName);
+            Config.Run.Remove(c => c.ImageSettings.DefaultFileName);
+        }
+        else
+        {
+            Config.Run.Set(c => c.PdfSettings.DefaultFileName, name);
+            Config.Run.Set(c => c.ImageSettings.DefaultFileName, name);
+        }
+        RefreshTitle();
+    }
+
+    private void ImageList_ImagesThumbnailInvalidated(object? sender, ImageListEventArgs e)
+    {
+        Invoker.Current.InvokeDispatch(UpdateToolbar);
+    }
+
+    private void ProfileManager_ProfilesUpdated(object? sender, EventArgs e)
+    {
+        UpdateScanButton();
+        UpdateProfilesToolbar();
+    }
+
+    private void ThumbnailController_ThumbnailSizeChanged(object? sender, EventArgs e)
+    {
+        SetThumbnailSpacing(_thumbnailController.VisibleSize, EtoPlatform.Current.GetScaleFactor(this));
+        UpdateToolbar();
+    }
+
+    protected UiImageList ImageList { get; }
+    protected DesktopCommands Commands => _commands.Value;
+
+    public void ReassignKeyboardShortcuts()
+    {
+        _keyboardShortcuts.Assign(Commands);
+        UpdateScanButton();
+        RecreateToolbarsAndMenus();
+    }
+
+    protected virtual void RecreateToolbarsAndMenus() => CreateToolbarsAndMenus();
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        _imageListSyncer = new ImageListSyncer(ImageList, _listView.ApplyDiffs, SynchronizationContext.Current!);
+        EtoPlatform.Current.AttachDpiDependency(_listView.Control,
+            scale => SetThumbnailSpacing(_thumbnailController.VisibleSize, scale));
+        _desktopController.PreInitialize();
+    }
+
+    protected override async void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        UpdateToolbar();
+        await _desktopController.Initialize();
+        AutoCheckForUpdatesOnStartup();
+    }
+
+    // Silently checks for updates on startup and, if one is available, shows the update notice under
+    // "Check for updates" in the sidebar (no message when already up to date, to avoid noise).
+    private async void AutoCheckForUpdatesOnStartup()
+    {
+        try
+        {
+            var update = await _desktopController.CheckForUpdatesFromUi();
+            if (update is { } available)
+            {
+                SetUpdateNotice($"⬆ Update available: {available.Name}\nClick here to update",
+                    () => _desktopController.StartUpdate(available));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!_desktopController.PrepareForClosing(true))
+        {
+            e.Cancel = true;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        _desktopController.Cleanup();
+
+        // TODO: Make sure we don't have any remaining memory leaks (toolbars? commands?)
+        _thumbnailController.ThumbnailSizeChanged -= ThumbnailController_ThumbnailSizeChanged;
+        ImageList.SelectionChanged -= ImageList_SelectionChanged;
+        ImageList.ImagesUpdated -= ImageList_ImagesUpdated;
+        ImageList.ImagesThumbnailInvalidated -= ImageList_ImagesThumbnailInvalidated;
+        _profileManager.ProfilesUpdated -= ProfileManager_ProfilesUpdated;
+        _notificationArea.Dispose();
+        _imageListSyncer?.Dispose();
+    }
+
+    protected virtual void CreateToolbarsAndMenus()
+    {
+        if (ToolBar == null)
+        {
+            ToolBar = new ToolBar();
+            ConfigureToolbars();
+        }
+        else
+        {
+            ToolBar.Items.Clear();
+        }
+
+        var hiddenButtons = Config.Get(c => c.HiddenButtons);
+
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Scan))
+            CreateToolbarButtonWithMenu(Commands.Scan, DesktopToolbarMenuType.Scan, new MenuProvider()
+                .Dynamic(_scanMenuCommands)
+                .Separator()
+                .Append(Commands.NewProfile)
+                .Append(Commands.BatchScan)
+                .Append(Config.Get(c => c.DisableScannerSharing) ? null : Commands.ScannerSharing));
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Profiles))
+            CreateToolbarButton(Commands.Profiles);
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Ocr))
+            CreateToolbarButton(Commands.Ocr);
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Import))
+            CreateToolbarButton(Commands.Import);
+        CreateToolbarSeparator();
+        if (!hiddenButtons.HasFlag(ToolbarButtons.SavePdf))
+            CreateToolbarButtonWithMenu(Commands.SavePdf, DesktopToolbarMenuType.SavePdf, new MenuProvider()
+                .Append(Commands.SaveAllPdf)
+                .Append(Commands.SaveSelectedPdf)
+                .Separator()
+                .Append(Commands.PdfSettings));
+        if (!hiddenButtons.HasFlag(ToolbarButtons.SaveImages))
+            CreateToolbarButtonWithMenu(Commands.SaveImages, DesktopToolbarMenuType.SaveImages, new MenuProvider()
+                .Append(Commands.SaveAllImages)
+                .Append(Commands.SaveSelectedImages)
+                .Separator()
+                .Append(Commands.ImageSettings));
+        if (!hiddenButtons.HasFlag(ToolbarButtons.EmailPdf) && PlatformCompat.System.CanEmail)
+            CreateToolbarButtonWithMenu(Commands.EmailPdf, DesktopToolbarMenuType.EmailPdf, new MenuProvider()
+                .Append(Commands.EmailAll)
+                .Append(Commands.EmailSelected)
+                .Separator()
+                .Append(Commands.EmailSettings)
+                .Append(Commands.PdfSettings));
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Print) && PlatformCompat.System.CanPrint)
+            CreateToolbarButton(Commands.Print);
+        CreateToolbarSeparator();
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Image))
+            CreateToolbarMenu(Commands.ImageMenu, new MenuProvider()
+                .Append(Commands.ViewImage)
+                .Separator()
+                .Append(Commands.Crop)
+                .Append(Commands.BrightCont)
+                .Append(Commands.HueSat)
+                .Append(Commands.BlackWhite)
+                .Append(Commands.Sharpen)
+                .Append(Commands.DocumentCorrection)
+                .Separator()
+                .Append(Commands.Split)
+                .Append(Commands.Combine)
+                .Separator()
+                .Dynamic(_editWithCommands)
+                .Append(Commands.EditWithPick)
+                .Separator()
+                .Append(Commands.ResetImage));
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Rotate))
+            CreateToolbarMenu(Commands.RotateMenu, GetRotateMenuProvider());
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Move))
+            CreateToolbarStackedButtons(Commands.MoveUp, Commands.MoveDown);
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Reorder))
+            CreateToolbarMenu(Commands.ReorderMenu, new MenuProvider()
+                .Append(Commands.Interleave)
+                .Append(Commands.Deinterleave)
+                .Separator()
+                .Append(Commands.AltInterleave)
+                .Append(Commands.AltDeinterleave)
+                .Separator()
+                .SubMenu(Commands.ReverseMenu, new MenuProvider()
+                    .Append(Commands.ReverseAll)
+                    .Append(Commands.ReverseSelected)));
+        CreateToolbarSeparator();
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Delete))
+            CreateToolbarButton(Commands.Delete);
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Clear))
+            CreateToolbarButton(Commands.ClearAll);
+        CreateToolbarSeparator();
+        if (!hiddenButtons.HasFlag(ToolbarButtons.Language))
+            CreateToolbarMenu(Commands.LanguageMenu, GetLanguageMenuProvider());
+        MaybeCreateToolbarStackedButtons(
+            Commands.Settings, !hiddenButtons.HasFlag(ToolbarButtons.Settings),
+            Commands.About, !hiddenButtons.HasFlag(ToolbarButtons.About));
+    }
+
+    private void MaybeCreateToolbarStackedButtons(Command command1, bool show1, Command command2, bool show2)
+    {
+        if (show1 && show2)
+        {
+            CreateToolbarStackedButtons(command1, command2);
+        }
+        else if (show1)
+        {
+            CreateToolbarButton(command1);
+        }
+        else if (show2)
+        {
+            CreateToolbarButton(command2);
+        }
+    }
+
+    public virtual void ShowToolbarMenu(DesktopToolbarMenuType menuType)
+    {
+    }
+
+    protected MenuProvider GetRotateMenuProvider() =>
+        new MenuProvider()
+            .Append(Commands.RotateLeft)
+            .Append(Commands.RotateRight)
+            .Append(Commands.Flip)
+            .Append(Commands.Deskew)
+            .Append(Commands.CustomRotate);
+
+    protected MenuProvider GetLanguageMenuProvider()
+    {
+        return new MenuProvider().Dynamic(_languageMenuCommands);
+    }
+
+    protected virtual void ConfigureToolbars()
+    {
+    }
+
+    protected virtual void UpdateProfilesToolbar()
+    {
+    }
+
+    public virtual void PlaceProfilesToolbar()
+    {
+    }
+
+    protected virtual void CreateToolbarButton(Command command) => throw new InvalidOperationException();
+
+    protected virtual void CreateToolbarButtonWithMenu(Command command, DesktopToolbarMenuType menuType,
+        MenuProvider menu) =>
+        throw new InvalidOperationException();
+
+    protected virtual void CreateToolbarMenu(Command command, MenuProvider menu) =>
+        throw new InvalidOperationException();
+
+    protected virtual void CreateToolbarStackedButtons(Command command1, Command command2) =>
+        throw new InvalidOperationException();
+
+    protected virtual void CreateToolbarSeparator() => throw new InvalidOperationException();
+
+    // TODO: Can we generalize this kind of logic?
+    protected SubMenuItem CreateSubMenu(Command menuCommand, MenuProvider menuProvider)
+    {
+        var menuItem = new SubMenuItem
+        {
+            Text = menuCommand.MenuText
+        };
+        EtoPlatform.Current.AttachDpiDependency(this,
+            scale => menuItem.Image = ((ActionCommand) menuCommand).GetIconImage(scale));
+        menuProvider.Handle(subItems =>
+        {
+            menuItem.Items.Clear();
+            foreach (var subItem in subItems)
+            {
+                switch (subItem)
+                {
+                    case MenuProvider.CommandItem { Command: var command }:
+                        menuItem.Items.Add(C.ButtonMenuItem(this, (ActionCommand) command));
+                        break;
+                    case MenuProvider.SeparatorItem:
+                        menuItem.Items.Add(new SeparatorMenuItem());
+                        break;
+                    case MenuProvider.SubMenuItem { Command: var command, MenuProvider: var subMenuProvider }:
+                        menuItem.Items.Add(CreateSubMenu(command, subMenuProvider));
+                        break;
+                }
+            }
+        });
+        return menuItem;
+    }
+
+    protected virtual LayoutElement GetControlButtons()
+    {
+        return L.Row(GetSidebarButton(), GetZoomButtons());
+    }
+
+    protected LayoutElement GetSidebarButton()
+    {
+        if (Config.Get(c => c.HiddenButtons).HasFlag(ToolbarButtons.Sidebar))
+        {
+            return C.None();
+        }
+        var toggleSidebar = C.ImageButton(Commands.ToggleSidebar);
+        EtoPlatform.Current.ConfigureZoomButton(toggleSidebar, "application_side_list_small");
+        return toggleSidebar.AlignTrailing();
+    }
+
+    protected LayoutElement GetZoomButtons()
+    {
+        var zoomIn = C.ImageButton(Commands.ZoomIn);
+        EtoPlatform.Current.ConfigureZoomButton(zoomIn, "zoom_in_small");
+        var zoomOut = C.ImageButton(Commands.ZoomOut);
+        EtoPlatform.Current.ConfigureZoomButton(zoomOut, "zoom_out_small");
+        return L.Row(zoomOut.AlignTrailing(), zoomIn.AlignTrailing()).Spacing(-1);
+    }
+
+    private void InitLanguageDropdown()
+    {
+        _languageMenuCommands.Value = _cultureHelper.GetAvailableCultures().Select(x =>
+            new ActionCommand(() => SetCulture(x.langCode))
+            {
+                MenuText = x.langName
+            }).ToImmutableList<Command>();
+    }
+
+    protected virtual void SetCulture(string cultureId)
+    {
+        _desktopController.Suspend();
+        try
+        {
+            Config.User.Set(c => c.Culture, cultureId);
+            _cultureHelper.SetCulturesFromConfig();
+            FormStateController.DoSaveFormState();
+            var newDesktop = FormFactory.Create<DesktopForm>();
+            newDesktop.Show();
+            Application.Instance.MainForm = newDesktop;
+            Close();
+        }
+        finally
+        {
+            _desktopController.Resume();
+        }
+        // TODO: If we make any other forms non-modal, we will need to refresh them too
+    }
+
+    protected virtual void UpdateToolbar()
+    {
+        // Top-level toolbar items
+        Commands.ImageMenu.Enabled =
+            Commands.RotateMenu.Enabled = Commands.MoveUp.Enabled = Commands.MoveDown.Enabled =
+                Commands.Delete.Enabled = ImageList.Selection.Any();
+        Commands.SavePdf.Enabled = Commands.SaveImages.Enabled = Commands.ClearAll.Enabled =
+            Commands.ReorderMenu.Enabled =
+                Commands.EmailPdf.Enabled = Commands.Print.Enabled = ImageList.Images.Any();
+
+        // "All" dropdown items
+        Commands.SaveAllPdf.Text = Commands.SaveAllImages.Text = Commands.EmailAll.Text =
+            Commands.ReverseAll.Text = string.Format(MiscResources.AllCount, ImageList.Images.Count);
+        Commands.SaveAllPdf.Enabled = Commands.SaveAllImages.Enabled = Commands.SaveAll.Enabled =
+            Commands.EmailAll.Enabled = Commands.ReverseAll.Enabled = ImageList.Images.Any();
+
+        // "Selected" dropdown items
+        Commands.SaveSelectedPdf.Text = Commands.SaveSelectedImages.Text = Commands.EmailSelected.Text =
+            Commands.ReverseSelected.Text = string.Format(MiscResources.SelectedCount, ImageList.Selection.Count);
+        Commands.SaveSelectedPdf.Enabled = Commands.SaveSelectedImages.Enabled = Commands.SaveSelected.Enabled =
+            Commands.EmailSelected.Enabled = Commands.ReverseSelected.Enabled = ImageList.Selection.Any();
+
+        // Other
+        Commands.SelectAll.Enabled = ImageList.Images.Any();
+        Commands.Undo.Enabled = ImageList.CanUndo;
+        Commands.Redo.Enabled = ImageList.CanRedo;
+        // TODO: Set undo/redo text here (e.g. "Undo Brightness/Contrast" instead of just "Undo")
+        Commands.ZoomIn.Enabled = ImageList.Images.Any() && _thumbnailController.VisibleSize < ThumbnailSizes.MAX_SIZE;
+        Commands.ZoomOut.Enabled = ImageList.Images.Any() && _thumbnailController.VisibleSize > ThumbnailSizes.MIN_SIZE;
+        Commands.NewProfile.Enabled =
+            !(Config.Get(c => c.NoUserProfiles) && _profileManager.Profiles.Any(x => x.IsLocked));
+        Commands.Combine.Enabled = ImageList.Images.Count > 1;
+    }
+
+    private void UpdateScanButton()
+    {
+        var defaultProfile = _profileManager.DefaultProfile;
+        UpdateTitle(defaultProfile);
+        var commandList = _profileManager.Profiles.Select(profile =>
+                new ActionCommand(() => _desktopScanController.ScanWithProfile(profile))
+                {
+                    MenuText = profile.DisplayName.Replace("&", "&&"),
+                    IconName = profile == defaultProfile ? "accept_small" : null
+                })
+            .ToImmutableList<Command>();
+        for (int i = 0; i < commandList.Count; i++)
+        {
+            _keyboardShortcuts.AssignProfileShortcut(i + 1, commandList[i]);
+        }
+        _scanMenuCommands.Value = commandList;
+    }
+
+    public void EditWithAppChanged()
+    {
+        var appName = Config.Get(c => c.EditWithAppName);
+        if (!string.IsNullOrEmpty(appName))
+        {
+            Commands.EditWithApp.Text = string.Format(UiStrings.EditWithAppName, appName);
+            _editWithCommands.Value = ImmutableList.Create((Command) Commands.EditWithApp);
+        }
+        else
+        {
+            _editWithCommands.Value = ImmutableList<Command>.Empty;
+        }
+    }
+
+    protected virtual void UpdateTitle(ScanProfile? defaultProfile)
+    {
+        var title = string.Format(UiStrings.ApneScanTitleFormat,
+            defaultProfile?.DisplayName ?? UiStrings.ApneScanFullName);
+        var docName = FirstPageName();
+        if (!string.IsNullOrWhiteSpace(docName))
+        {
+            title = $"{docName} - {title}";
+        }
+        Title = title;
+    }
+
+    private void RefreshTitle() => UpdateTitle(_profileManager.DefaultProfile);
+
+    // ---- Naming a scanned page (F2 in the pages area) via offline OCR ----
+
+    // Called by the Rename shortcut/command; renames the file in My Files if it has focus, otherwise
+    // names the selected scanned page(s).
+    private void PerformRename()
+    {
+        if (_filesGrid != null && _filesGrid.HasFocus)
+        {
+            RenameSelected();
+        }
+        else
+        {
+            NameScannedDocument(autoDetect: true);
+        }
+    }
+
+    // Names the selected scanned page(s). When autoDetect is true, offline OCR reads the page and
+    // suggests a name (e.g. "Aadhaar Card"); the user then confirms or edits it. The name is shown
+    // beneath that page and (for the first page) used as the default save file name.
+    private async void NameScannedDocument(bool autoDetect)
+    {
+        try
+        {
+            var targets = ImageList.Selection.ToList();
+            if (targets.Count == 0)
+            {
+                var first = ImageList.Images.FirstOrDefault();
+                if (first != null)
+                {
+                    targets.Add(first);
+                }
+            }
+            if (targets.Count == 0)
+            {
+                return;
+            }
+            var primary = targets[0];
+            var initial = _pageNames.TryGetValue(primary, out var existing) ? existing : "Document";
+            if (autoDetect)
+            {
+                var suggested = await _desktopController.DetectDocumentName(primary);
+                if (!string.IsNullOrWhiteSpace(suggested))
+                {
+                    initial = suggested!;
+                }
+            }
+            var title = targets.Count > 1 ? $"Name {targets.Count} pages" : "Document name";
+            var name = PromptForText(title, initial);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+            var trimmed = name!.Trim();
+            foreach (var t in targets)
+            {
+                _pageNames[t] = trimmed;
+            }
+            _listView.Control.Invalidate();
+            UpdateDefaultFileNameFromFirstPage();
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    private void ListViewMouseWheel(object? sender, MouseEventArgs e)
+    {
+        if (e.Modifiers.HasFlag(Keys.Control))
+        {
+            _thumbnailController.StepSize(e.Delta.Height);
+            e.Handled = true;
+        }
+    }
+
+    private void ListViewMouseMove(object? sender, MouseEventArgs e)
+    {
+        _notificationManager.StartTimers();
+    }
+
+    protected virtual void SetThumbnailSpacing(int thumbnailSize, float scale)
+    {
+    }
+
+    private void ListViewItemClicked(object? sender, EventArgs e) => _desktopSubFormController.ShowViewerForm();
+
+    private void ListViewSelectionChanged(object? sender, EventArgs e)
+    {
+        ImageList.UpdateSelection(_listView.Selection);
+        UpdateToolbar();
+    }
+
+    private void ListViewDrop(object? sender, DropEventArgs args)
+    {
+        if (args.CustomData != null)
+        {
+            var data = _imageTransfer.FromBinaryData(args.CustomData);
+            if (data.ProcessId == Process.GetCurrentProcess().Id)
+            {
+                DragMoveImages(args.Position);
+            }
+            else
+            {
+                _desktopController.ImportDirect(data, false);
+            }
+        }
+        else if (args.FilePaths != null)
+        {
+            _desktopController.ImportFiles(args.FilePaths);
+        }
+    }
+
+    private void DragMoveImages(int position)
+    {
+        if (!ImageList.Selection.Any())
+        {
+            return;
+        }
+        if (position != -1)
+        {
+            _imageListActions.MoveTo(position);
+        }
+    }
+
+    public void ToggleSidebar()
+    {
+        _sidebar.ToggleVisibility();
+    }
+}

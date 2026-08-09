@@ -1,0 +1,57 @@
+using System.Xml.Serialization;
+using ApneScan.ImportExport.Email;
+using ApneScan.ImportExport.Images;
+using ApneScan.Pdf;
+using ApneScan.Ocr;
+using ApneScan.Scan;
+using ApneScan.Scan.Batch;
+
+namespace ApneScan.Config.ObsoleteTypes;
+
+[XmlType("UserConfig")]
+public class UserConfigV0
+{
+    public int Version { get; set; }
+
+    public string? Culture { get; set; }
+
+    public List<FormState>? FormStates { get; set; }
+
+    public HashSet<string>? BackgroundOperations { get; set; }
+
+    public bool CheckForUpdates { get; set; }
+
+    public DateTime? LastUpdateCheckDate { get; set; }
+
+    public DateTime? FirstRunDate { get; set; }
+
+    public DateTime? LastDonatePromptDate { get; set; }
+
+    public bool EnableOcr { get; set; }
+
+    public string? OcrLanguageCode { get; set; }
+
+    public LocalizedOcrMode OcrMode { get; set; }
+
+    public bool OcrAfterScanning { get; set; }
+
+    public string? LastImageExt { get; set; }
+
+    public PdfSettings PdfSettings { get; set; } = new();
+
+    public ImageSettings ImageSettings { get; set; } = new();
+
+    public EmailSettings EmailSettings { get; set; } = new();
+
+    public EmailSetup EmailSetup { get; set; } = new();
+
+    public int ThumbnailSize { get; set; } = ThumbnailSizes.DEFAULT_SIZE;
+
+    public BatchSettings? LastBatchSettings { get; set; }
+
+    public DockStyle DesktopToolStripDock { get; set; }
+
+    public KeyboardShortcuts? KeyboardShortcuts { get; set; }
+
+    public List<NamedPageSize>? CustomPageSizePresets { get; set; }
+}

@@ -1,0 +1,8 @@
+- name: Api Docs
+  href: api/
+  homepage: api/
+- name: Nuget
+  href: https://www.nuget.org/packages/ApneScan.Sdk
+  homepage: https://www.nuget.org/packages/ApneScan.Sdk
+- name: Github
+  href: https://github.com/cyanfish/apnescan/tree/master/ApneScan.Sdk

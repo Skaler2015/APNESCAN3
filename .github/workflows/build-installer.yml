@@ -1,0 +1,91 @@
+name: Build Installer (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/naps2-repo-copy-n32wvi
+    paths:
+      - '.github/workflows/build-installer.yml'
+      - 'ApneScan.Setup/apnescan-setup.iss'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Bundle English OCR data (offline document naming)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ApneScan.Lib/ocr | Out-Null
+          $url = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata"
+          Invoke-WebRequest -Uri $url -OutFile ApneScan.Lib/ocr/eng.traineddata
+          $mb = (Get-Item ApneScan.Lib/ocr/eng.traineddata).Length/1MB
+          "eng.traineddata size: {0:N1} MB" -f $mb
+
+      - name: Compute version (1.0.<run_number>)
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "1.0.$env:GITHUB_RUN_NUMBER"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building installer version $v"
+
+      - name: Publish ApneScan (win-x64, self-contained, multi-file)
+        shell: pwsh
+        run: >
+          dotnet publish ApneScan.App.WinForms/ApneScan.App.WinForms.csproj
+          -c Release
+          -f net10.0-windows
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=false
+          -p:PublishTrimmed=false
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -p:Version=${{ steps.ver.outputs.version }}
+          -p:AssemblyVersion=${{ steps.ver.outputs.version }}
+          -p:FileVersion=${{ steps.ver.outputs.version }}
+          -o publish/ApneScan
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer (ApneScan-Setup.exe)
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVer=${{ steps.ver.outputs.version }}" "/DSourceDir=$PWD\publish\ApneScan" "/O$PWD\installer-out" "ApneScan.Setup\apnescan-setup.iss"
+          Get-ChildItem installer-out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApneScan-Setup
+          path: installer-out/ApneScan-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish installer to a GitHub Release (direct download)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "apnescan-installer"
+          gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
+          gh release create $tag installer-out/ApneScan-Setup.exe `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --title "ApneScan Setup ${{ steps.ver.outputs.version }} (win-x64)" `
+            --notes "Windows x64 installer for ApneScan ${{ steps.ver.outputs.version }}. Run ApneScan-Setup.exe to install (per-user, no admin needed) - it creates Desktop and Start Menu shortcuts and launches the app. On first launch Windows SmartScreen may warn (unsigned build) - click 'More info' then 'Run anyway'."

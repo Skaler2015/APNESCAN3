@@ -1,0 +1,11 @@
+using ApneScan.EtoForms.Notifications;
+
+namespace ApneScan.ImportExport;
+
+public interface IExportController
+{
+    Task<bool> SavePdf(ICollection<UiImage> uiImages, ISaveNotify notify);
+    Task<bool> SaveImages(ICollection<UiImage> uiImages, ISaveNotify notify);
+    Task<bool> SavePdfOrImages(ICollection<UiImage> uiImages, ISaveNotify notify);
+    Task<bool> EmailPdf(ICollection<UiImage> uiImages);
+}
