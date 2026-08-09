@@ -276,6 +276,12 @@ public class DesktopCommands
             Text = UiStrings.Delete,
             IconName = "cross"
         };
+        // The actual rename behaviour lives in the desktop form (it's context-sensitive), so it wires up
+        // RenameAction; this command just forwards to it.
+        Rename = new ActionCommand(() => RenameAction?.Invoke())
+        {
+            Text = "Rename"
+        };
         ClearAll = new ActionCommand(desktopController.Clear)
         {
             ToolBarText = UiStrings.Clear,
@@ -408,6 +414,10 @@ public class DesktopCommands
     public ActionCommand ReverseAll { get; set; }
     public ActionCommand ReverseSelected { get; set; }
     public ActionCommand Delete { get; set; }
+    public ActionCommand Rename { get; set; }
+
+    /// <summary>Set by the desktop form to provide the context-sensitive rename behaviour.</summary>
+    public Action? RenameAction { get; set; }
     public ActionCommand ClearAll { get; set; }
     public ActionCommand LanguageMenu { get; set; }
     public ActionCommand Settings { get; set; }

@@ -75,6 +75,7 @@ public class KeyboardShortcutsForm : EtoDialogBase
         new(UiStrings.ReverseSelected, c => c.KeyboardShortcuts.ReorderReverseSelected),
         Shortcut.Separator,
         new(UiStrings.Delete, c => c.KeyboardShortcuts.Delete),
+        new("Rename", c => c.KeyboardShortcuts.Rename),
         new(UiStrings.Clear, c => c.KeyboardShortcuts.Clear),
         new(UiStrings.Settings, c => c.KeyboardShortcuts.Settings),
         new(UiStrings.About, c => c.KeyboardShortcuts.About),

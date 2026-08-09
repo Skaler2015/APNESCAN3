@@ -7,7 +7,7 @@ public class LayoutLeftPanel : LayoutContainer
 {
     private readonly LayoutElement _left;
     private readonly LayoutElement _right;
-    private readonly LayoutOverlay _overlay;
+    private LayoutOverlay _overlay;
 
     private Func<int> _widthGetter = () => 0;
     private Action<int> _widthSetter = _ => { };
@@ -225,6 +225,8 @@ public class LayoutLeftPanel : LayoutContainer
         _right.Scale = false;
         _left.Scale = true;
         Splitter.FixedPanel = SplitterFixedPanel.Panel2;
+        // Widen the gap at the panel's left edge so the resize divider is easy to grab with the mouse.
+        _overlay = L.Overlay(Splitter, L.Row(_left, _right).Spacing(8));
         return this;
     }
 }

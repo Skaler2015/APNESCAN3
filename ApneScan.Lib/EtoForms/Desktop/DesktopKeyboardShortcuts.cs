@@ -40,6 +40,7 @@ public class DesktopKeyboardShortcuts
         _ksm.Assign(ks.BatchScan, commands.BatchScan);
         _ksm.Assign(ks.Clear, commands.ClearAll);
         _ksm.Assign(ks.Delete, commands.Delete);
+        _ksm.Assign(ks.Rename, commands.Rename);
         if (PlatformCompat.System.CanEmail)
         {
             _ksm.Assign(ks.EmailPDF, commands.EmailPdf);

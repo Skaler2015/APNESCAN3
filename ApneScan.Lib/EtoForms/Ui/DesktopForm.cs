@@ -80,6 +80,8 @@ public abstract class DesktopForm : EtoFormBase
         _commands = commands;
 
         _desktopFormProvider.DesktopForm = this;
+        // Rename is context-sensitive (My Files vs scanned pages), so provide its behaviour here.
+        Commands.RenameAction = PerformRename;
         _keyboardShortcuts.Assign(Commands);
         CreateToolbarsAndMenus();
         UpdateScanButton();
@@ -87,9 +89,9 @@ public abstract class DesktopForm : EtoFormBase
         UpdateProfilesToolbar();
         InitLanguageDropdown();
 
-        // Show the auto-detected document name beneath each scanned page (instead of "1 / 2").
+        // Show each page's own auto-detected document name beneath it (instead of "1 / 2").
         imageListViewBehavior.PageLabelProvider =
-            (_, _, _) => string.IsNullOrWhiteSpace(_documentName) ? null : _documentName;
+            (img, _, _) => _pageNames.TryGetValue(img, out var n) ? n : null;
         _listView = EtoPlatform.Current.CreateListView(imageListViewBehavior);
         _listView.Selection = ImageList.Selection;
         _listView.ItemClicked += ListViewItemClicked;
@@ -114,15 +116,10 @@ public abstract class DesktopForm : EtoFormBase
             }
             return _keyboardShortcuts.Perform(key);
         });
-        // In the scanned pages area, F2 auto-detects the document name (offline OCR) and lets the user
-        // confirm it; every other key falls through to the normal keyboard shortcuts.
+        // In the scanned pages area, Escape closes My Files; all other keys (including the configurable
+        // Rename shortcut, F2 by default) go through the normal keyboard shortcuts.
         EtoPlatform.Current.HandleKeyDown(_listView.Control, key =>
         {
-            if (key == Keys.F2)
-            {
-                NameScannedDocument(autoDetect: true);
-                return true;
-            }
             if (key == Keys.Escape && _filesPanelVis.IsVisible)
             {
                 _filesPanelVis.IsVisible = false;
@@ -251,6 +248,17 @@ public abstract class DesktopForm : EtoFormBase
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         RefreshFavourites();
+        var keyboardShortcutsCmd = new ActionCommand(ShowKeyboardShortcuts) { Text = "Keyboard shortcuts" };
+        var checkUpdatesCmd = new ActionCommand(CheckForUpdatesFromSidebar) { Text = "Check for updates" };
+        // Holds the "update available / up to date" notice shown directly under Check for updates.
+        _updateStack = new StackLayout
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 2,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            // Never leave this empty - an empty StackLayout breaks Eto's WinForms layout on load.
+            Items = { new Label { Text = "" } }
+        };
         return L.Column(
             C.Label("WORKSPACE"),
             NavButton(Commands.Scan),
@@ -264,9 +272,68 @@ public abstract class DesktopForm : EtoFormBase
             C.Spacer(),
             C.Label("SYSTEM"),
             NavButton(Commands.Settings),
+            NavButton(keyboardShortcutsCmd),
+            NavButton(checkUpdatesCmd),
+            _updateStack,
             NavButton(Commands.About),
             C.Filler()
         ).Padding(8);
+    }
+
+    private void ShowKeyboardShortcuts()
+    {
+        try
+        {
+            FormFactory.Create<KeyboardShortcutsForm>().ShowModal();
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // ---- Check for updates from the sidebar, with an inline "update available" action ----
+
+    private StackLayout? _updateStack;
+
+    private async void CheckForUpdatesFromSidebar()
+    {
+        SetUpdateNotice("Checking for updates…", null);
+        try
+        {
+            var update = await _desktopController.CheckForUpdatesFromUi();
+            if (update is { } available)
+            {
+                SetUpdateNotice($"⬆ Update available: {available.Name}\nClick here to update",
+                    () => _desktopController.StartUpdate(available));
+            }
+            else
+            {
+                SetUpdateNotice("✓ You're on the latest version", null);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+            SetUpdateNotice("Update check failed — try again", null);
+        }
+    }
+
+    // Shows a message just below "Check for updates". If onClick is set, it's a clickable update button.
+    private void SetUpdateNotice(string text, Action? onClick)
+    {
+        if (_updateStack == null) return;
+        _updateStack.Items.Clear();
+        if (onClick != null)
+        {
+            var link = new LinkButton { Text = text };
+            link.Click += (_, _) => onClick();
+            _updateStack.Items.Add(link);
+        }
+        else
+        {
+            _updateStack.Items.Add(new Label { Text = text });
+        }
     }
 
     private LayoutControl NavButton(ActionCommand command) =>
@@ -869,51 +936,100 @@ public abstract class DesktopForm : EtoFormBase
 
     private void ImageList_ImagesUpdated(object? sender, ImageListEventArgs e)
     {
-        Invoker.Current.InvokeDispatch(UpdateToolbar);
-        MaybeAutoDetectName();
+        Invoker.Current.InvokeDispatch(() =>
+        {
+            UpdateToolbar();
+            DetectNamesForNewPages();
+        });
     }
 
-    private bool _autoNameTried;
+    // Per-page auto document names (read from each page by offline OCR), shown beneath each thumbnail.
+    private readonly Dictionary<UiImage, string> _pageNames = new();
+    private bool _autoNameRunning;
 
-    // Automatically detects the document name (offline OCR) once after pages are scanned/imported, and
-    // shows it beneath the pages. Runs at most once per batch; forgotten when the pages are cleared so a
-    // new scan is detected fresh.
-    private void MaybeAutoDetectName()
+    // Reads each newly-added page with offline OCR and labels it with its own detected document name.
+    // Names are per page, so a batch of different documents gets a different name on each. Runs on the UI
+    // thread for the page bookkeeping; only the OCR itself runs in the background.
+    private void DetectNamesForNewPages()
     {
-        var first = ImageList.Images.FirstOrDefault();
-        if (first == null)
+        // Drop names for pages that are no longer present.
+        var current = ImageList.Images.ToHashSet();
+        foreach (var key in _pageNames.Keys.Where(k => !current.Contains(k)).ToList())
         {
-            _autoNameTried = false;
-            if (!string.IsNullOrEmpty(_documentName))
-            {
-                _documentName = null;
-                Config.Run.Remove(c => c.PdfSettings.DefaultFileName);
-                Config.Run.Remove(c => c.ImageSettings.DefaultFileName);
-                RefreshTitle();
-                _listView.Control.Invalidate();
-            }
-            return;
+            _pageNames.Remove(key);
         }
-        if (!string.IsNullOrEmpty(_documentName) || _autoNameTried)
+        UpdateDefaultFileNameFromFirstPage();
+
+        if (_autoNameRunning)
         {
             return;
         }
-        _autoNameTried = true;
+        var pending = ImageList.Images.Where(img => !_pageNames.ContainsKey(img)).ToList();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+        _autoNameRunning = true;
         Task.Run(async () =>
         {
             try
             {
-                var name = await _desktopController.DetectDocumentName(first);
-                if (!string.IsNullOrWhiteSpace(name))
+                foreach (var img in pending)
                 {
-                    Invoker.Current.InvokeDispatch(() => ApplyDocumentName(name!.Trim()));
+                    string? name = null;
+                    try
+                    {
+                        name = await _desktopController.DetectDocumentName(img);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUiError(ex);
+                    }
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        continue;
+                    }
+                    var detected = name!.Trim();
+                    Invoker.Current.InvokeDispatch(() =>
+                    {
+                        // Only apply if the page is still present and hasn't been named in the meantime.
+                        if (ImageList.Images.Contains(img) && !_pageNames.ContainsKey(img))
+                        {
+                            _pageNames[img] = detected;
+                            _listView.Control.Invalidate();
+                            UpdateDefaultFileNameFromFirstPage();
+                        }
+                    });
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                LogUiError(ex);
+                _autoNameRunning = false;
             }
         });
+    }
+
+    // The first page's name is used as the default save file name and window title (best-effort).
+    private string? FirstPageName()
+    {
+        var first = ImageList.Images.FirstOrDefault();
+        return first != null && _pageNames.TryGetValue(first, out var n) ? n : null;
+    }
+
+    private void UpdateDefaultFileNameFromFirstPage()
+    {
+        var name = FirstPageName();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Config.Run.Remove(c => c.PdfSettings.DefaultFileName);
+            Config.Run.Remove(c => c.ImageSettings.DefaultFileName);
+        }
+        else
+        {
+            Config.Run.Set(c => c.PdfSettings.DefaultFileName, name);
+            Config.Run.Set(c => c.ImageSettings.DefaultFileName, name);
+        }
+        RefreshTitle();
     }
 
     private void ImageList_ImagesThumbnailInvalidated(object? sender, ImageListEventArgs e)
@@ -959,6 +1075,26 @@ public abstract class DesktopForm : EtoFormBase
         base.OnShown(e);
         UpdateToolbar();
         await _desktopController.Initialize();
+        AutoCheckForUpdatesOnStartup();
+    }
+
+    // Silently checks for updates on startup and, if one is available, shows the update notice under
+    // "Check for updates" in the sidebar (no message when already up to date, to avoid noise).
+    private async void AutoCheckForUpdatesOnStartup()
+    {
+        try
+        {
+            var update = await _desktopController.CheckForUpdatesFromUi();
+            if (update is { } available)
+            {
+                SetUpdateNotice($"⬆ Update available: {available.Name}\nClick here to update",
+                    () => _desktopController.StartUpdate(available));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -1294,65 +1430,80 @@ public abstract class DesktopForm : EtoFormBase
     {
         var title = string.Format(UiStrings.ApneScanTitleFormat,
             defaultProfile?.DisplayName ?? UiStrings.ApneScanFullName);
-        if (!string.IsNullOrWhiteSpace(_documentName))
+        var docName = FirstPageName();
+        if (!string.IsNullOrWhiteSpace(docName))
         {
-            title = $"{_documentName} - {title}";
+            title = $"{docName} - {title}";
         }
         Title = title;
     }
 
     private void RefreshTitle() => UpdateTitle(_profileManager.DefaultProfile);
 
-    // ---- Naming the scanned document (F2 in the pages area) via offline OCR ----
+    // ---- Naming a scanned page (F2 in the pages area) via offline OCR ----
 
-    private string? _documentName;
+    // Called by the Rename shortcut/command; renames the file in My Files if it has focus, otherwise
+    // names the selected scanned page(s).
+    private void PerformRename()
+    {
+        if (_filesGrid != null && _filesGrid.HasFocus)
+        {
+            RenameSelected();
+        }
+        else
+        {
+            NameScannedDocument(autoDetect: true);
+        }
+    }
 
-    // Names the current scanned document. When autoDetect is true, offline OCR reads the selected page
-    // and suggests a name (e.g. "Aadhaar Card", "Invoice"); the user then confirms or edits it. The chosen
-    // name becomes the default file name for Save PDF / Save Images and is shown in the window title.
+    // Names the selected scanned page(s). When autoDetect is true, offline OCR reads the page and
+    // suggests a name (e.g. "Aadhaar Card"); the user then confirms or edits it. The name is shown
+    // beneath that page and (for the first page) used as the default save file name.
     private async void NameScannedDocument(bool autoDetect)
     {
         try
         {
-            var target = ImageList.Selection.FirstOrDefault() ?? ImageList.Images.FirstOrDefault();
-            if (target == null)
+            var targets = ImageList.Selection.ToList();
+            if (targets.Count == 0)
+            {
+                var first = ImageList.Images.FirstOrDefault();
+                if (first != null)
+                {
+                    targets.Add(first);
+                }
+            }
+            if (targets.Count == 0)
             {
                 return;
             }
-            var initial = _documentName ?? "Document";
+            var primary = targets[0];
+            var initial = _pageNames.TryGetValue(primary, out var existing) ? existing : "Document";
             if (autoDetect)
             {
-                Title = string.Format(UiStrings.ApneScanTitleFormat, "Detecting name…");
-                var suggested = await _desktopController.DetectDocumentName(target);
-                RefreshTitle();
+                var suggested = await _desktopController.DetectDocumentName(primary);
                 if (!string.IsNullOrWhiteSpace(suggested))
                 {
                     initial = suggested!;
                 }
             }
-            var name = PromptForText("Document name", initial);
+            var title = targets.Count > 1 ? $"Name {targets.Count} pages" : "Document name";
+            var name = PromptForText(title, initial);
             if (string.IsNullOrWhiteSpace(name))
             {
                 return;
             }
-            ApplyDocumentName(name!.Trim());
+            var trimmed = name!.Trim();
+            foreach (var t in targets)
+            {
+                _pageNames[t] = trimmed;
+            }
+            _listView.Control.Invalidate();
+            UpdateDefaultFileNameFromFirstPage();
         }
         catch (Exception ex)
         {
             LogUiError(ex);
         }
-    }
-
-    private void ApplyDocumentName(string name)
-    {
-        _documentName = name;
-        // Use the name as the default file name in the save dialogs. The Run scope is in-memory only
-        // (this session), so it never persists to the user's config on disk.
-        Config.Run.Set(c => c.PdfSettings.DefaultFileName, name);
-        Config.Run.Set(c => c.ImageSettings.DefaultFileName, name);
-        RefreshTitle();
-        // Repaint the pages so the new name shows beneath each thumbnail.
-        _listView.Control.Invalidate();
     }
 
     private void ListViewMouseWheel(object? sender, MouseEventArgs e)

@@ -139,6 +139,7 @@ public static class InternalDefaults
             },
             KeyboardShortcuts = new KeyboardShortcuts
             {
+                Rename = "F2",
                 ScanDefault = "Enter",
                 ScanProfile1 = "",
                 ScanProfile2 = "F3",

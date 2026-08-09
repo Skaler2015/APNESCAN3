@@ -83,6 +83,33 @@ public class DesktopController
 
     public bool SkipRecoveryCleanup { get; set; }
 
+    /// <summary>
+    /// Checks for an update on demand (from the UI). Returns the available update, or null if up to date
+    /// or the check failed. Records the last-checked time like the automatic check does.
+    /// </summary>
+    public async Task<UpdateInfo?> CheckForUpdatesFromUi()
+    {
+        try
+        {
+            var update = await _updateChecker.CheckForUpdates();
+            var transact = _config.User.BeginTransaction();
+            transact.Set(c => c.HasCheckedForUpdates, true);
+            transact.Set(c => c.LastUpdateCheckDate, DateTime.Now);
+            transact.Commit();
+            return update;
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error checking for updates from UI");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Starts downloading and installing the given update (self-replacing the app).
+    /// </summary>
+    public void StartUpdate(UpdateInfo update) => _updateChecker.StartUpdate(update);
+
     // Applies the requested default keyboard shortcuts (Enter = scan default, Space = save selected PDF,
     // F2 freed for rename) even for users whose config already persisted the old NAPS2 defaults. Only
     // changes a shortcut still sitting at its old default, so it never clobbers a deliberate custom choice.
@@ -94,6 +121,13 @@ public class DesktopController
             if (ks == null) return;
             var transaction = _config.User.BeginTransaction();
             bool changed = false;
+            // Seed the Rename shortcut (F2) for configs that predate it (null = never had the field;
+            // an explicit empty string means the user deliberately unassigned it, so leave it alone).
+            if (ks.Rename == null)
+            {
+                transaction.Set(c => c.KeyboardShortcuts.Rename, "F2");
+                changed = true;
+            }
             if (ks.ScanDefault is "Mod+Enter" or "Ctrl+Enter")
             {
                 transaction.Set(c => c.KeyboardShortcuts.ScanDefault, "Enter");

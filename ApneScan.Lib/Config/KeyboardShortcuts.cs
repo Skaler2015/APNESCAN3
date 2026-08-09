@@ -2,6 +2,7 @@ namespace ApneScan.Config;
 
 public class KeyboardShortcuts
 {
+    public string? Rename { get; set; }
     public string? ScanDefault { get; set; }
     public string? ScanProfile1 { get; set; }
     public string? ScanProfile2 { get; set; }
