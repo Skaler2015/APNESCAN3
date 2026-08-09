@@ -19,8 +19,12 @@ internal class LocalTwainController : ITwainController
     static LocalTwainController()
     {
         PlatformInfo.Current.Log.IsDebugEnabled = true;
+        // TWAIN identity fields (manufacturer/product family/product name) are limited to 32
+        // characters; keep them short to avoid an NTwain length error.
+        static string Cap(string s, int max) => s.Length <= max ? s : s.Substring(0, max);
         TwainAppId = TWIdentity.Create(DataGroups.Image | DataGroups.Control, AssemblyHelper.Version,
-            AssemblyHelper.Company, AssemblyHelper.Product, AssemblyHelper.Product, AssemblyHelper.Description);
+            Cap(AssemblyHelper.Company, 31), Cap(AssemblyHelper.Product, 31), Cap(AssemblyHelper.Product, 31),
+            AssemblyHelper.Description);
     }
 
     private static readonly Once TwainDsmSetup = new(() =>

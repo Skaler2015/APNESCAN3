@@ -9,8 +9,8 @@
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <RootNamespace>ApneScan</RootNamespace>
 
-    <Title>ApneScan - Not Another PDF Scanner</Title>
-    <Product>ApneScan - Not Another PDF Scanner</Product>
+    <Title>ApneScan</Title>
+    <Product>ApneScan</Product>
     <Configurations>Debug;Release;DebugLang;Release-Msi;Release-Zip</Configurations>
   </PropertyGroup>
 
