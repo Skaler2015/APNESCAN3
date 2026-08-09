@@ -302,18 +302,19 @@ public abstract class DesktopForm : EtoFormBase
         var importCommand = new ActionCommand(ImportFolder) { Text = "Import" };
         var newCommand = new ActionCommand(NewFolder) { Text = "New" };
         var favCommand = new ActionCommand(FavouriteCurrentOrSelected) { Text = "★ Favourite" };
-        // Preview is part of the file browser: file list on the left, preview on the right,
-        // so opening My Files never squeezes a separate preview column.
-        _previewImage = new ImageView();
+        // Preview is a separate, independently-resizable panel. It draws the selected image scaled to
+        // fit the panel, so resizing the panel makes the preview grow/shrink to match (no scrollbars).
+        _previewDrawable = new Drawable { BackgroundColor = Colors.Transparent };
+        _previewDrawable.Paint += PaintPreview;
+        _previewDrawable.SizeChanged += (_, _) => _previewDrawable?.Invalidate();
         _previewLabel = new Label { Text = "" };
         var openCmd = new ActionCommand(() =>
         {
             if (_previewPath != null) ApneScan.Util.ProcessHelper.OpenFile(_previewPath);
         }) { Text = "Open" };
-        // The preview is a separate, independently-resizable panel (built here so its controls exist).
         _previewPaneElement = L.Column(
             C.Label("Preview"),
-            new Scrollable { Content = _previewImage }.Scale(),
+            _previewDrawable.Scale(),
             _previewLabel,
             C.Button(openCmd)
         ).Padding(6).Visible(_previewVis);
@@ -634,7 +635,8 @@ public abstract class DesktopForm : EtoFormBase
     // ---- File preview: shows the selected file (image preview when possible). The controls are
     // created inside CreateFilesPanel so the preview sits next to the file list. ----
 
-    private ImageView? _previewImage;
+    private Drawable? _previewDrawable;
+    private Bitmap? _previewBitmap;
     private Label? _previewLabel;
     private string? _previewPath;
     private readonly LayoutVisibility _previewVis = new(false);
@@ -647,26 +649,41 @@ public abstract class DesktopForm : EtoFormBase
             _previewPath = file.FullName;
             _previewLabel.Text = file.Name;
             _previewVis.IsVisible = true;
-            if (_previewImage != null)
+            var ext = file.Extension.ToLowerInvariant();
+            var old = _previewBitmap;
+            try
             {
-                var ext = file.Extension.ToLowerInvariant();
-                try
-                {
-                    _previewImage.Image =
-                        ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
-                            ? new Bitmap(file.FullName)
-                            : null;
-                }
-                catch
-                {
-                    _previewImage.Image = null;
-                }
+                _previewBitmap =
+                    ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
+                        ? new Bitmap(file.FullName)
+                        : null;
             }
+            catch
+            {
+                _previewBitmap = null;
+            }
+            old?.Dispose();
+            _previewDrawable?.Invalidate();
         }
         else
         {
             _previewVis.IsVisible = false;
         }
+    }
+
+    // Draws the current preview image scaled to fit the drawable, preserving aspect ratio and centered.
+    private void PaintPreview(object? sender, PaintEventArgs e)
+    {
+        var bmp = _previewBitmap;
+        if (bmp == null || _previewDrawable == null) return;
+        var area = _previewDrawable.Size;
+        if (area.Width <= 0 || area.Height <= 0 || bmp.Width <= 0 || bmp.Height <= 0) return;
+        float scale = Math.Min((float) area.Width / bmp.Width, (float) area.Height / bmp.Height);
+        float w = bmp.Width * scale;
+        float h = bmp.Height * scale;
+        float x = (area.Width - w) / 2;
+        float y = (area.Height - h) / 2;
+        e.Graphics.DrawImage(bmp, x, y, w, h);
     }
 
     private void OpeningContextMenu(object? sender, EventArgs e)
