@@ -139,8 +139,8 @@ public static class InternalDefaults
             },
             KeyboardShortcuts = new KeyboardShortcuts
             {
-                ScanDefault = "Mod+Enter",
-                ScanProfile1 = "F2",
+                ScanDefault = "Enter",
+                ScanProfile1 = "",
                 ScanProfile2 = "F3",
                 ScanProfile3 = "F4",
                 ScanProfile4 = "F5",
@@ -160,7 +160,7 @@ public static class InternalDefaults
                 Import = "Mod+O",
                 SavePDF = "",
                 SavePDFAll = "Mod+S",
-                SavePDFSelected = "Mod+Shift+S",
+                SavePDFSelected = "Space",
                 PDFSettings = "Mod+Alt+P",
                 SaveImages = "",
                 SaveImagesAll = "Mod+I",

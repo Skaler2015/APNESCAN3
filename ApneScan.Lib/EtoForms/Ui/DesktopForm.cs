@@ -120,6 +120,12 @@ public abstract class DesktopForm : EtoFormBase
                 NameScannedDocument(autoDetect: true);
                 return true;
             }
+            if (key == Keys.Escape && _filesPanelVis.IsVisible)
+            {
+                _filesPanelVis.IsVisible = false;
+                _previewVis.IsVisible = false;
+                return true;
+            }
             return _keyboardShortcuts.Perform(key);
         });
 
