@@ -182,7 +182,7 @@ public abstract class DesktopForm : EtoFormBase
             .SizeConfig(
                 () => Config.Get(c => c.FilesPanelWidth),
                 width => Config.User.Set(c => c.FilesPanelWidth, width),
-                160);
+                180);
 
         var mainArea = L.Column(scanBar, browserAndRest.Scale());
 
@@ -263,6 +263,8 @@ public abstract class DesktopForm : EtoFormBase
 
     private GridView? _filesGrid;
     private Label? _filesPathLabel;
+    private TextBox? _filesSearch;
+    private List<FileSystemInfo> _currentEntries = new();
     private readonly LayoutVisibility _filesPanelVis = new(false);
     private string _currentFolder = "";
 
@@ -313,6 +315,25 @@ public abstract class DesktopForm : EtoFormBase
         cm.Items.Add(batchItem);
         _filesGrid.ContextMenu = cm;
         _filesPathLabel = new Label { Text = "" };
+        // Fast in-folder search: filters the open folder as you type (Esc clears / closes).
+        _filesSearch = new TextBox { PlaceholderText = "🔍 Search this folder…" };
+        _filesSearch.TextChanged += (_, _) => ApplyFileFilter();
+        _filesSearch.KeyDown += (_, e) =>
+        {
+            if (e.Key == Keys.Escape)
+            {
+                if (_filesSearch.Text.Length > 0)
+                {
+                    _filesSearch.Text = "";
+                }
+                else
+                {
+                    _filesPanelVis.IsVisible = false;
+                    _previewVis.IsVisible = false;
+                }
+                e.Handled = true;
+            }
+        };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
         var openCommand = new ActionCommand(OpenFolderInBrowser) { Text = "Open" };
         var importCommand = new ActionCommand(ImportFolder) { Text = "Import" };
@@ -334,18 +355,21 @@ public abstract class DesktopForm : EtoFormBase
             _previewLabel,
             C.Button(openCmd)
         ).Padding(6).Visible(_previewVis);
-        // The browser itself: toolbar + path + file list. It fills its splitter panel so the user can
-        // drag it wider or narrower.
+        // The browser itself: toolbar + path + search + file list. It fills its splitter panel so the
+        // user can drag it wider or narrower. The toolbar is split across two rows so every button stays
+        // fully visible even when the panel is narrow.
         return L.Column(
             L.Row(
                 C.Button(upCommand).Width(36),
-                C.Button(openCommand),
-                C.Button(importCommand),
-                C.Button(newCommand),
-                C.Button(favCommand),
-                C.Filler()
+                C.Button(openCommand).Scale(),
+                C.Button(importCommand).Scale()
+            ),
+            L.Row(
+                C.Button(newCommand).Scale(),
+                C.Button(favCommand).Scale()
             ),
             _filesPathLabel,
+            _filesSearch,
             _filesGrid.Scale()
         ).Padding(4).Visible(_filesPanelVis);
     }
@@ -448,7 +472,26 @@ public abstract class DesktopForm : EtoFormBase
         {
             // Ignore folders we can't read.
         }
-        if (_filesGrid != null) _filesGrid.DataStore = entries;
+        _currentEntries = entries;
+        // Reset the search box when moving to a new folder.
+        if (_filesSearch != null && _filesSearch.Text.Length > 0) _filesSearch.Text = "";
+        ApplyFileFilter();
+    }
+
+    // Filters the currently open folder by the search text (name contains, case-insensitive). This is a
+    // fast in-memory filter over the already-listed entries - it never re-reads the disk.
+    private void ApplyFileFilter()
+    {
+        if (_filesGrid == null) return;
+        var query = _filesSearch?.Text?.Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            _filesGrid.DataStore = _currentEntries;
+            return;
+        }
+        _filesGrid.DataStore = _currentEntries
+            .Where(e => e.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     private void GoUpFolder()

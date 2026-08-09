@@ -63,7 +63,7 @@ public static class InternalDefaults
             ShowPageNumbers = false,
             SidebarVisible = true,
             SidebarWidth = 230,
-            FilesPanelWidth = 240,
+            FilesPanelWidth = 260,
             PreviewPanelWidth = 260,
             EditWithAppPath = "",
             EditWithAppName = "",
