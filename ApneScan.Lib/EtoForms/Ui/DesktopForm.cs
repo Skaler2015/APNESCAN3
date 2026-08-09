@@ -272,6 +272,10 @@ public abstract class DesktopForm : EtoFormBase
         _filesGrid.ContextMenu = cm;
         _filesPathLabel = new Label { Text = "" };
         var upCommand = new ActionCommand(GoUpFolder) { Text = "⬆" };
+        var openCommand = new ActionCommand(OpenFolderInBrowser) { Text = "Open" };
+        var importCommand = new ActionCommand(ImportFolder) { Text = "Import" };
+        var newCommand = new ActionCommand(NewFolder) { Text = "New" };
+        var favCommand = new ActionCommand(FavouriteCurrentOrSelected) { Text = "★ Favourite" };
         // Preview is part of the file browser: file list on the left, preview on the right,
         // so opening My Files never squeezes a separate preview column.
         _previewImage = new ImageView();
@@ -289,13 +293,82 @@ public abstract class DesktopForm : EtoFormBase
         return L.Column(
             L.Row(
                 C.Button(upCommand).Width(36),
-                _filesPathLabel.AlignCenter()
+                C.Button(openCommand),
+                C.Button(importCommand),
+                C.Button(newCommand),
+                C.Button(favCommand),
+                C.Filler()
             ),
+            _filesPathLabel,
             L.Row(
                 _filesGrid.Width(250),
                 previewPane
             ).Scale()
         ).Padding(4).Visible(_filesPanelVis);
+    }
+
+    // "Open" — browse any folder inside the My Files panel.
+    private void OpenFolderInBrowser()
+    {
+        var dlg = new SelectFolderDialog();
+        if (dlg.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dlg.Directory))
+        {
+            LoadFolder(dlg.Directory);
+            _filesPanelVis.IsVisible = true;
+        }
+    }
+
+    // "Import" — pick a folder and import all its files into the scanned pages.
+    private void ImportFolder()
+    {
+        var dlg = new SelectFolderDialog();
+        if (dlg.ShowDialog(this) == DialogResult.Ok && !string.IsNullOrEmpty(dlg.Directory))
+        {
+            try
+            {
+                var files = Directory.GetFiles(dlg.Directory).OrderBy(f => f).ToList();
+                if (files.Count > 0)
+                {
+                    _desktopController.ImportFiles(files);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogUiError(ex);
+            }
+        }
+    }
+
+    // "New" — create a new folder inside the folder currently open in the browser.
+    private void NewFolder()
+    {
+        if (string.IsNullOrEmpty(_currentFolder)) return;
+        var name = PromptForText("New folder name", "New Folder");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(_currentFolder, name));
+            LoadFolder(_currentFolder);
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    // "★ Favourite" — pin the selected folder (or the current one) to Favourites.
+    private void FavouriteCurrentOrSelected()
+    {
+        var folder = (_filesGrid?.SelectedItem as DirectoryInfo)?.FullName
+                     ?? (string.IsNullOrEmpty(_currentFolder) ? null : _currentFolder);
+        if (folder == null) return;
+        var favs = LoadFavourites();
+        if (!favs.Contains(folder))
+        {
+            favs.Add(folder);
+            try { File.WriteAllLines(FavouritesFile, favs); } catch { /* ignore */ }
+            RefreshFavourites();
+        }
     }
 
     private static string GetEntryLabel(FileSystemInfo entry) =>
