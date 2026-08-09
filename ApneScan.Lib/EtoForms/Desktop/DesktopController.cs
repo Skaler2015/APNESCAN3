@@ -83,6 +83,43 @@ public class DesktopController
 
     public bool SkipRecoveryCleanup { get; set; }
 
+    // Applies the requested default keyboard shortcuts (Enter = scan default, Space = save selected PDF,
+    // F2 freed for rename) even for users whose config already persisted the old NAPS2 defaults. Only
+    // changes a shortcut still sitting at its old default, so it never clobbers a deliberate custom choice.
+    private void ApplyShortcutDefaultMigration()
+    {
+        try
+        {
+            var ks = _config.Get(c => c.KeyboardShortcuts);
+            if (ks == null) return;
+            var transaction = _config.User.BeginTransaction();
+            bool changed = false;
+            if (ks.ScanDefault is "Mod+Enter" or "Ctrl+Enter")
+            {
+                transaction.Set(c => c.KeyboardShortcuts.ScanDefault, "Enter");
+                changed = true;
+            }
+            if (ks.ScanProfile1 == "F2")
+            {
+                transaction.Set(c => c.KeyboardShortcuts.ScanProfile1, "");
+                changed = true;
+            }
+            if (ks.SavePDFSelected is "Mod+Shift+S")
+            {
+                transaction.Set(c => c.KeyboardShortcuts.SavePDFSelected, "Space");
+                changed = true;
+            }
+            if (changed)
+            {
+                transaction.Commit();
+            }
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error applying keyboard shortcut default migration");
+        }
+    }
+
     public void PreInitialize()
     {
         if (_preInitialized) return;
@@ -94,6 +131,7 @@ public class DesktopController
     {
         if (_initialized) return;
         _initialized = true;
+        ApplyShortcutDefaultMigration();
         _sharedDeviceManager.StartSharing();
         StartProcessCoordinator();
         ShowStartupMessages();

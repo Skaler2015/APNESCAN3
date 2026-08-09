@@ -117,6 +117,9 @@ public class LayoutLeftPanel : LayoutContainer
     private void DoLayoutFixedRight(LayoutContext context, RectangleF bounds)
     {
         int total = (int) bounds.Width;
+        int minRight = (int) ((_minWidth ?? 160) * context.Scale);
+        int minLeft = (int) (100 * context.Scale);
+        Splitter.Panel1MinimumSize = minLeft;
 
         if (_collapseVisibility is { IsVisible: false })
         {
@@ -130,20 +133,13 @@ public class LayoutLeftPanel : LayoutContainer
             return;
         }
 
-        int w = _minWidth.HasValue ? (int) (_minWidth * context.Scale) : MeasureWidth(context, bounds, _right);
-        Splitter.Panel1MinimumSize = (int) (100 * context.Scale);
-        Splitter.Panel2MinimumSize = w;
+        Splitter.Panel2MinimumSize = minRight;
 
         if (!_isInitialized || context.Scale != _lastScale || _wasCollapsed)
         {
             _wasCollapsed = false;
             _lastScale = context.Scale;
-            int initialWidth = Math.Max((int) (_widthGetter() * context.Scale), w);
-            int pos = Math.Max(0, total - initialWidth);
-            _inLayout = true;
-            EtoPlatform.Current.SetSplitterPosition(Splitter, pos);
-            _inLayout = false;
-            _right.Width = initialWidth;
+            _right.Width = Math.Max((int) (_widthGetter() * context.Scale), minRight);
             if (!_isInitialized)
             {
                 Splitter.PositionChanged += (_, _) =>
@@ -163,6 +159,19 @@ public class LayoutLeftPanel : LayoutContainer
                 };
                 _isInitialized = true;
             }
+        }
+
+        // Keep the splitter divider aligned with the preview's left edge every layout (not just the
+        // first), so it stays visible and grabbable even after the bounds settle or the window resizes.
+        int desiredW = _right.Width ?? minRight;
+        desiredW = Math.Max(minRight, Math.Min(desiredW, Math.Max(minRight, total - minLeft)));
+        _right.Width = desiredW;
+        int targetPos = Math.Max(0, total - desiredW);
+        if (Splitter.Position != targetPos)
+        {
+            _inLayout = true;
+            EtoPlatform.Current.SetSplitterPosition(Splitter, targetPos);
+            _inLayout = false;
         }
 
         _overlay.DoLayout(context, bounds);
