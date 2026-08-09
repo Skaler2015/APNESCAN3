@@ -1,11 +1,14 @@
+using System.Reflection;
 using System.Threading;
 using Eto.Drawing;
 using Eto.Forms;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 using ApneScan.EtoForms.Notifications;
 using ApneScan.ImportExport;
 using ApneScan.ImportExport.Images;
+using ApneScan.Ocr;
 using ApneScan.Platform.Windows;
 using ApneScan.Recovery;
 using ApneScan.Remoting;
@@ -368,6 +371,93 @@ public class DesktopController
         var filesList = files.ToList();
         filesList.Sort(new NaturalStringComparer());
         return filesList;
+    }
+
+    /// <summary>
+    /// Runs offline OCR on a scanned page and suggests a document name (e.g. "Aadhaar Card", "Invoice")
+    /// based on the recognized text. Returns null if OCR isn't available or no confident guess can be made.
+    /// This never throws and never touches the network - the English language data is bundled with the app.
+    /// </summary>
+    public async Task<string?> DetectDocumentName(UiImage image)
+    {
+        try
+        {
+            var engine = _scanningContext.OcrEngine;
+            if (engine == null)
+            {
+                return null;
+            }
+            EnsureBundledOcrData();
+
+            var dir = Path.Combine(Paths.Temp, Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string tempImagePath;
+                using (var processedImage = image.GetClonedImage())
+                using (var rendered = processedImage.Render())
+                {
+                    tempImagePath = ImageExportHelper.SaveSmallestFormat(
+                        Path.Combine(dir, "page"), rendered, false, -1, out _);
+                }
+
+                var ocrParams = new OcrParams("eng", OcrMode.Fast, 30);
+                var result = await engine.ProcessImage(_scanningContext, tempImagePath, ocrParams,
+                    CancellationToken.None);
+                if (result == null)
+                {
+                    return null;
+                }
+                var text = string.Join("\n", result.Lines.Select(l => l.Text));
+                return DocumentNameClassifier.Suggest(text);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { /* best-effort cleanup */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error detecting document name via OCR");
+            return null;
+        }
+    }
+
+    // Copies the English OCR language data that ships inside the app to the components folder the OCR
+    // engine reads from, so document-name detection works fully offline without a separate download.
+    private void EnsureBundledOcrData()
+    {
+        try
+        {
+            var custom = _config.Get(c => c.ComponentsPath);
+            var componentsPath = string.IsNullOrWhiteSpace(custom)
+                ? Paths.Components
+                : Environment.ExpandEnvironmentVariables(custom);
+            // Mirrors TesseractLanguageManager: Fast mode reads from the "fast" subfolder of tesseract4.
+            var targetDir = Path.Combine(componentsPath, "tesseract4", "fast");
+            var targetFile = Path.Combine(targetDir, "eng.traineddata");
+            if (File.Exists(targetFile))
+            {
+                return;
+            }
+            using var stream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("eng.traineddata");
+            if (stream == null)
+            {
+                return;
+            }
+            Directory.CreateDirectory(targetDir);
+            var tempFile = targetFile + ".tmp";
+            using (var fileStream = File.Create(tempFile))
+            {
+                stream.CopyTo(fileStream);
+            }
+            File.Move(tempFile, targetFile);
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error extracting bundled OCR language data");
+        }
     }
 
     internal void ImportDirect(ImageTransferData data, bool copy)

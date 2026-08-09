@@ -101,7 +101,17 @@ public abstract class DesktopForm : EtoFormBase
         EtoPlatform.Current.AttachMouseWheelEvent(_listView.Control, ListViewMouseWheel);
         EtoPlatform.Current.AttachMouseMoveEvent(_listView.Control, ListViewMouseMove);
         EtoPlatform.Current.HandleKeyDown(this, _keyboardShortcuts.Perform);
-        EtoPlatform.Current.HandleKeyDown(_listView.Control, _keyboardShortcuts.Perform);
+        // In the scanned pages area, F2 auto-detects the document name (offline OCR) and lets the user
+        // confirm it; every other key falls through to the normal keyboard shortcuts.
+        EtoPlatform.Current.HandleKeyDown(_listView.Control, key =>
+        {
+            if (key == Keys.F2)
+            {
+                NameScannedDocument(autoDetect: true);
+                return true;
+            }
+            return _keyboardShortcuts.Perform(key);
+        });
 
         //
         // Shown += FDesktop_Shown;
@@ -649,10 +659,17 @@ public abstract class DesktopForm : EtoFormBase
         }
         if (ImageList.Selection.Any())
         {
+            var autoName = new ButtonMenuItem { Text = "Auto-detect name (F2)" };
+            autoName.Click += (_, _) => NameScannedDocument(autoDetect: true);
+            var setName = new ButtonMenuItem { Text = "Set document name…" };
+            setName.Click += (_, _) => NameScannedDocument(autoDetect: false);
             // TODO: Is this memory leaking (because of event handlers) when commands are converted to menuitems?
             _contextMenu.Items.AddRange(
             [
                 C.ButtonMenuItem(this, Commands.ViewImage),
+                new SeparatorMenuItem(),
+                autoName,
+                setName,
                 new SeparatorMenuItem(),
                 C.ButtonMenuItem(this, Commands.SelectAll),
                 C.ButtonMenuItem(this, Commands.Copy),
@@ -1067,7 +1084,65 @@ public abstract class DesktopForm : EtoFormBase
 
     protected virtual void UpdateTitle(ScanProfile? defaultProfile)
     {
-        Title = string.Format(UiStrings.ApneScanTitleFormat, defaultProfile?.DisplayName ?? UiStrings.ApneScanFullName);
+        var title = string.Format(UiStrings.ApneScanTitleFormat,
+            defaultProfile?.DisplayName ?? UiStrings.ApneScanFullName);
+        if (!string.IsNullOrWhiteSpace(_documentName))
+        {
+            title = $"{_documentName} - {title}";
+        }
+        Title = title;
+    }
+
+    private void RefreshTitle() => UpdateTitle(_profileManager.DefaultProfile);
+
+    // ---- Naming the scanned document (F2 in the pages area) via offline OCR ----
+
+    private string? _documentName;
+
+    // Names the current scanned document. When autoDetect is true, offline OCR reads the selected page
+    // and suggests a name (e.g. "Aadhaar Card", "Invoice"); the user then confirms or edits it. The chosen
+    // name becomes the default file name for Save PDF / Save Images and is shown in the window title.
+    private async void NameScannedDocument(bool autoDetect)
+    {
+        try
+        {
+            var target = ImageList.Selection.FirstOrDefault() ?? ImageList.Images.FirstOrDefault();
+            if (target == null)
+            {
+                return;
+            }
+            var initial = _documentName ?? "Document";
+            if (autoDetect)
+            {
+                Title = string.Format(UiStrings.ApneScanTitleFormat, "Detecting name…");
+                var suggested = await _desktopController.DetectDocumentName(target);
+                RefreshTitle();
+                if (!string.IsNullOrWhiteSpace(suggested))
+                {
+                    initial = suggested!;
+                }
+            }
+            var name = PromptForText("Document name", initial);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+            ApplyDocumentName(name!.Trim());
+        }
+        catch (Exception ex)
+        {
+            LogUiError(ex);
+        }
+    }
+
+    private void ApplyDocumentName(string name)
+    {
+        _documentName = name;
+        // Use the name as the default file name in the save dialogs. The Run scope is in-memory only
+        // (this session), so it never persists to the user's config on disk.
+        Config.Run.Set(c => c.PdfSettings.DefaultFileName, name);
+        Config.Run.Set(c => c.ImageSettings.DefaultFileName, name);
+        RefreshTitle();
     }
 
     private void ListViewMouseWheel(object? sender, MouseEventArgs e)

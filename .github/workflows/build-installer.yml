@@ -24,6 +24,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Bundle English OCR data (offline document naming)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ApneScan.Lib/ocr | Out-Null
+          $url = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata"
+          Invoke-WebRequest -Uri $url -OutFile ApneScan.Lib/ocr/eng.traineddata
+          $mb = (Get-Item ApneScan.Lib/ocr/eng.traineddata).Length/1MB
+          "eng.traineddata size: {0:N1} MB" -f $mb
+
       - name: Compute version (1.0.<run_number>)
         id: ver
         shell: pwsh

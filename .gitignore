@@ -6,3 +6,5 @@ packages/
 .vs/
 .idea/
 .nuget/
+# Bundled OCR language data (downloaded at build time, never committed)
+ApneScan.Lib/ocr/

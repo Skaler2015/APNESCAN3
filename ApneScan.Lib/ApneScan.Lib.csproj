@@ -110,5 +110,17 @@
     <EmbeddedResource Remove="ClientCreds_.resx" />
     <Compile Remove="ClientCreds_.Designer.cs" />
   </ItemGroup>
-  
+
+  <!--
+  Bundled offline OCR language data (English). The build workflow downloads eng.traineddata into
+  ocr/ before building; when present it is embedded so document-name detection works fully offline.
+  Local builds without the file simply skip it (detection then gracefully returns no suggestion).
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)ocr/eng.traineddata')">
+    <None Remove="ocr/eng.traineddata" />
+    <EmbeddedResource Include="ocr/eng.traineddata">
+      <LogicalName>eng.traineddata</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>
