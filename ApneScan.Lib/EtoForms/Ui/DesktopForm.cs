@@ -468,7 +468,19 @@ public abstract class DesktopForm : EtoFormBase
     {
         if (_favStack == null) return;
         _favStack.Items.Clear();
-        foreach (var fav in LoadFavourites())
+        var favs = LoadFavourites();
+        // An empty StackLayout crashes Eto's WinForms layout on load, so always keep one item.
+        if (favs.Count == 0)
+        {
+            _favStack.Items.Add(new Label
+            {
+                Text = "(no favourites yet)",
+                TextColor = Colors.Gray,
+                Font = SystemFonts.Default(7)
+            });
+            return;
+        }
+        foreach (var fav in favs)
         {
             var path = fav;
             var name = Path.GetFileName(path.TrimEnd('\\', '/'));
