@@ -423,6 +423,46 @@ public class DesktopController
         }
     }
 
+    /// <summary>
+    /// Returns the number of pages in a PDF file, or 0 if it can't be read.
+    /// </summary>
+    public int GetPdfPageCount(string path)
+    {
+        try
+        {
+            lock (ApneScan.Pdf.Pdfium.PdfiumNativeLibrary.Instance)
+            {
+                using var doc = ApneScan.Pdf.Pdfium.PdfDocument.Load(path);
+                return doc.PageCount;
+            }
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error reading PDF page count");
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Renders a single PDF page to PNG bytes for previewing, or null on failure.
+    /// </summary>
+    public byte[]? RenderPdfPageToPng(string path, int pageIndex)
+    {
+        try
+        {
+            var renderer = new ApneScan.Pdf.PdfiumPdfRenderer();
+            using var image = renderer.RenderPage(
+                _scanningContext.ImageContext, path, PdfRenderSize.FromDpi(100), pageIndex);
+            using var stream = image.SaveToMemoryStream(ImageFileFormat.Png);
+            return stream.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _scanningContext.Logger.LogError(ex, "Error rendering PDF preview page");
+            return null;
+        }
+    }
+
     // Copies the English OCR language data that ships inside the app to the components folder the OCR
     // engine reads from, so document-name detection works fully offline without a separate download.
     private void EnsureBundledOcrData()

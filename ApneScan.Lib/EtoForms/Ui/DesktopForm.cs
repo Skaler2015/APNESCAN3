@@ -178,22 +178,24 @@ public abstract class DesktopForm : EtoFormBase
         var previewPane = _previewPaneElement ?? C.None();
 
         // Each side panel is a resizable, drag-to-size splitter that collapses (no reserved space)
-        // when hidden. Left to right: [nav] [files browser] [preview] [scanned pages].
-        var previewAndPages = L.LeftPanel(previewPane, scannedPages)
-            .Collapsible(_previewVis)
-            .SizeConfig(
-                () => Config.Get(c => c.PreviewPanelWidth),
-                width => Config.User.Set(c => c.PreviewPanelWidth, width),
-                140);
-
-        var browserAndRest = L.LeftPanel(filesBrowser, previewAndPages)
+        // when hidden. Left to right: [nav] [files browser] [scanned pages] [preview].
+        var browserAndPages = L.LeftPanel(filesBrowser, scannedPages)
             .Collapsible(_filesPanelVis)
             .SizeConfig(
                 () => Config.Get(c => c.FilesPanelWidth),
                 width => Config.User.Set(c => c.FilesPanelWidth, width),
                 180);
 
-        var mainArea = L.Column(scanBar, browserAndRest.Scale());
+        // The preview is docked on the far right (fixed/resizable), the rest fills to its left.
+        var bodyWithPreview = L.LeftPanel(browserAndPages, previewPane)
+            .FixRight()
+            .Collapsible(_previewVis)
+            .SizeConfig(
+                () => Config.Get(c => c.PreviewPanelWidth),
+                width => Config.User.Set(c => c.PreviewPanelWidth, width),
+                160);
+
+        var mainArea = L.Column(scanBar, bodyWithPreview.Scale());
 
         // Left navigation sidebar in the proven resizable left panel.
         LayoutController.Content = L.LeftPanel(
@@ -353,6 +355,8 @@ public abstract class DesktopForm : EtoFormBase
         _previewDrawable = new Drawable { BackgroundColor = Colors.Transparent };
         _previewDrawable.Paint += PaintPreview;
         _previewDrawable.SizeChanged += (_, _) => _previewDrawable?.Invalidate();
+        // Scroll the wheel over the preview to page through a multi-page PDF.
+        EtoPlatform.Current.AttachMouseWheelEvent(_previewDrawable, PreviewMouseWheel);
         _previewLabel = new Label { Text = "" };
         var openCmd = new ActionCommand(() =>
         {
@@ -707,6 +711,9 @@ public abstract class DesktopForm : EtoFormBase
     private Bitmap? _previewBitmap;
     private Label? _previewLabel;
     private string? _previewPath;
+    private string? _previewPdfPath;
+    private int _previewPdfPage;
+    private int _previewPdfPageCount;
     private readonly LayoutVisibility _previewVis = new(false);
 
     private void UpdatePreview(FileSystemInfo? entry)
@@ -715,28 +722,80 @@ public abstract class DesktopForm : EtoFormBase
         if (entry is FileInfo file)
         {
             _previewPath = file.FullName;
-            _previewLabel.Text = file.Name;
             _previewVis.IsVisible = true;
             var ext = file.Extension.ToLowerInvariant();
-            var old = _previewBitmap;
-            try
+            if (ext == ".pdf")
             {
-                _previewBitmap =
-                    ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
-                        ? new Bitmap(file.FullName)
-                        : null;
+                // PDF preview: render page 1; the wheel scrolls through pages.
+                _previewPdfPath = file.FullName;
+                _previewPdfPage = 0;
+                _previewPdfPageCount = _desktopController.GetPdfPageCount(file.FullName);
+                RenderPreviewPdfPage();
             }
-            catch
+            else
             {
-                _previewBitmap = null;
+                _previewPdfPath = null;
+                _previewPdfPageCount = 0;
+                _previewLabel.Text = file.Name;
+                var old = _previewBitmap;
+                try
+                {
+                    _previewBitmap =
+                        ext is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff"
+                            ? new Bitmap(file.FullName)
+                            : null;
+                }
+                catch
+                {
+                    _previewBitmap = null;
+                }
+                old?.Dispose();
+                _previewDrawable?.Invalidate();
             }
-            old?.Dispose();
-            _previewDrawable?.Invalidate();
         }
         else
         {
             _previewVis.IsVisible = false;
         }
+    }
+
+    // Renders the current PDF preview page and updates the label with the page position.
+    private void RenderPreviewPdfPage()
+    {
+        if (_previewPdfPath == null) return;
+        byte[]? bytes = _desktopController.RenderPdfPageToPng(_previewPdfPath, _previewPdfPage);
+        var old = _previewBitmap;
+        try
+        {
+            _previewBitmap = bytes != null ? new Bitmap(bytes) : null;
+        }
+        catch
+        {
+            _previewBitmap = null;
+        }
+        old?.Dispose();
+        if (_previewLabel != null)
+        {
+            var name = Path.GetFileName(_previewPdfPath);
+            _previewLabel.Text = _previewPdfPageCount > 1
+                ? $"{name}  ({_previewPdfPage + 1}/{_previewPdfPageCount})"
+                : name;
+        }
+        _previewDrawable?.Invalidate();
+    }
+
+    // Wheel over the preview pages through a multi-page PDF (up = previous, down = next).
+    private void PreviewMouseWheel(object? sender, MouseEventArgs e)
+    {
+        if (_previewPdfPath == null || _previewPdfPageCount <= 1) return;
+        int dir = e.Delta.Height > 0 ? -1 : 1;
+        int newPage = Math.Max(0, Math.Min(_previewPdfPageCount - 1, _previewPdfPage + dir));
+        if (newPage != _previewPdfPage)
+        {
+            _previewPdfPage = newPage;
+            RenderPreviewPdfPage();
+        }
+        e.Handled = true;
     }
 
     // Draws the current preview image scaled to fit the drawable, preserving aspect ratio and centered.

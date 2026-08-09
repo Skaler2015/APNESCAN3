@@ -18,6 +18,8 @@ public class LayoutLeftPanel : LayoutContainer
     private LayoutVisibility? _collapseVisibility;
     private bool _collapseSubscribed;
     private bool _wasCollapsed;
+    // When true, the RIGHT panel is the fixed/resizable one and the left panel fills (a right-docked panel).
+    private bool _fixedRight;
 
     public LayoutLeftPanel(LayoutElement left, LayoutElement right) : base([left, right])
     {
@@ -43,13 +45,20 @@ public class LayoutLeftPanel : LayoutContainer
 
     public override void DoLayout(LayoutContext context, RectangleF bounds)
     {
-        // When the left panel is collapsible and currently hidden, give all the space to the right
-        // panel (position 0) instead of reserving the splitter width, so nothing gets squeezed.
         if (_collapseVisibility != null && !_collapseSubscribed)
         {
             _collapseVisibility.IsVisibleChanged += (_, _) => context.Invalidate();
             _collapseSubscribed = true;
         }
+
+        if (_fixedRight)
+        {
+            DoLayoutFixedRight(context, bounds);
+            return;
+        }
+
+        // When the left panel is collapsible and currently hidden, give all the space to the right
+        // panel (position 0) instead of reserving the splitter width, so nothing gets squeezed.
         if (_collapseVisibility is { IsVisible: false })
         {
             _inLayout = true;
@@ -102,6 +111,63 @@ public class LayoutLeftPanel : LayoutContainer
         _overlay.DoLayout(context, bounds);
     }
 
+    // Right-docked variant: the RIGHT panel keeps a fixed/resizable width and the left panel fills. The
+    // Eto splitter's Position is always the left (Panel1) width, so we map it to the right width using the
+    // splitter's current total width.
+    private void DoLayoutFixedRight(LayoutContext context, RectangleF bounds)
+    {
+        int total = (int) bounds.Width;
+
+        if (_collapseVisibility is { IsVisible: false })
+        {
+            _inLayout = true;
+            Splitter.Panel2MinimumSize = 0;
+            EtoPlatform.Current.SetSplitterPosition(Splitter, Math.Max(0, total));
+            _inLayout = false;
+            _right.Width = 0;
+            _wasCollapsed = true;
+            _overlay.DoLayout(context, bounds);
+            return;
+        }
+
+        int w = _minWidth.HasValue ? (int) (_minWidth * context.Scale) : MeasureWidth(context, bounds, _right);
+        Splitter.Panel1MinimumSize = (int) (100 * context.Scale);
+        Splitter.Panel2MinimumSize = w;
+
+        if (!_isInitialized || context.Scale != _lastScale || _wasCollapsed)
+        {
+            _wasCollapsed = false;
+            _lastScale = context.Scale;
+            int initialWidth = Math.Max((int) (_widthGetter() * context.Scale), w);
+            int pos = Math.Max(0, total - initialWidth);
+            _inLayout = true;
+            EtoPlatform.Current.SetSplitterPosition(Splitter, pos);
+            _inLayout = false;
+            _right.Width = initialWidth;
+            if (!_isInitialized)
+            {
+                Splitter.PositionChanged += (_, _) =>
+                {
+                    if (_inLayout)
+                    {
+                        return;
+                    }
+                    int currentTotal = Splitter.Width;
+                    int newW = Math.Max(0, currentTotal - Splitter.Position);
+                    if (_right.Width != newW)
+                    {
+                        _right.Width = newW;
+                        _widthSetter((int) (newW / context.Scale));
+                        context.Invalidate();
+                    }
+                };
+                _isInitialized = true;
+            }
+        }
+
+        _overlay.DoLayout(context, bounds);
+    }
+
     private int MeasureWidth(LayoutContext context, RectangleF bounds, LayoutElement element)
     {
         var w = element.Width;
@@ -130,13 +196,26 @@ public class LayoutLeftPanel : LayoutContainer
     }
 
     /// <summary>
-    /// Makes the left panel collapse to zero width (handing all space to the right panel) whenever the
-    /// given visibility is hidden, and restore its configured width when shown again. Used so a hidden
-    /// side panel doesn't reserve splitter space.
+    /// Makes the panel collapse to zero width (handing all space to the other panel) whenever the given
+    /// visibility is hidden, and restore its configured width when shown again. Used so a hidden side
+    /// panel doesn't reserve splitter space.
     /// </summary>
     public LayoutLeftPanel Collapsible(LayoutVisibility visibility)
     {
         _collapseVisibility = visibility;
+        return this;
+    }
+
+    /// <summary>
+    /// Docks the fixed/resizable panel on the RIGHT instead of the left, so the left panel fills and the
+    /// right panel is the one whose width is configured and draggable.
+    /// </summary>
+    public LayoutLeftPanel FixRight()
+    {
+        _fixedRight = true;
+        _right.Scale = false;
+        _left.Scale = true;
+        Splitter.FixedPanel = SplitterFixedPanel.Panel2;
         return this;
     }
 }
