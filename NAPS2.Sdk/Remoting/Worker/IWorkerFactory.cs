@@ -1,0 +1,15 @@
+﻿using NAPS2.Scan;
+
+namespace NAPS2.Remoting.Worker;
+
+/// <summary>
+/// A factory interface to spawn NAPS2.Worker.exe instances as needed.
+/// </summary>
+internal interface IWorkerFactory
+{
+    void Init(ScanningContext scanningContext, WorkerFactoryInitOptions? options = null);
+    void StartSpareWorkers(ScanningContext scanningContext);
+    WorkerContext Create(ScanningContext scanningContext, WorkerType workerType);
+    void RecreateSpareWorkers();
+    Task StopSpareWorkers();
+}

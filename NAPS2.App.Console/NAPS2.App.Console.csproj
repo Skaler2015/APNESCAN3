@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- TODO: Consider NativeAOT instead if we want to avoid depending on .NET Framework. -->
+    <TargetFramework>net462</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NAPS2.Console</RootNamespace>
+    <AssemblyName>NAPS2.Console</AssemblyName>
+    <!-- Allow NAPS2.App.WinForms (which is self-contained) to reference this to copy it to its output -->
+    <ShouldBeValidatedAsExecutableReference>false</ShouldBeValidatedAsExecutableReference>
+
+    <Title>NAPS2 - Not Another PDF Scanner</Title>
+    <Product>NAPS2 - Not Another PDF Scanner</Product>
+  </PropertyGroup>
+
+  <Import Project="..\NAPS2.Setup\targets\CommonTargets.targets" />
+
+  <ItemGroup>
+    <!-- This project is a standalone exe with no references -->
+    <Compile Include="..\NAPS2.Sdk\Remoting\Worker\ProcessJob.cs" Link="ProcessJob.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net11.0-windows</TargetFrameworks>
+        <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net11.0</TargetFrameworks>
+        <OutputType>Exe</OutputType>
+        <NoWarn>$(NoWarn);xUnit1051;CS8632</NoWarn>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+        <Configurations>Debug;Release;DebugLang</Configurations>
+        <DefineConstants Condition=" '$(Configuration)' == 'DebugLang' ">DEBUG_LANG</DefineConstants>
+    </PropertyGroup>
+
+    <Import Project="..\NAPS2.Setup\targets\CommonTargets.targets" />
+    <Import Project="..\NAPS2.Setup\targets\NativeLibs.targets" />
+    <Import Project="..\NAPS2.Setup\targets\LibUsers.targets" />
+
+    <ItemGroup>
+        <PackageReference Include="NAPS2.Jpeg.Binaries" Version="1.0.0" />
+        <PackageReference Include="NAPS2.Pdfium.Binaries" Version="1.3.0" />
+        <PackageReference Include="NAPS2.Tesseract.Binaries" Version="1.5.0" />
+
+        <ProjectReference Include="..\NAPS2.Lib.Tests\NAPS2.Lib.Tests.csproj" />
+
+        <PackageReference Include="Appium.WebDriver" Version="4.4.5" />
+        <PackageReference Include="Microsoft.Testing.Extensions.Retry" Version="2.5.2" />
+        <PackageReference Include="NSubstitute" Version="6.0.0" />
+        <PackageReference Include="xunit.v3" Version="4.0.3" />
+    </ItemGroup>
+
+</Project>

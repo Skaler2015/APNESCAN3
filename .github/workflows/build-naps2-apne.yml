@@ -1,0 +1,60 @@
+# Builds the modified NAPS2 8.6.0 (sidebar preview + My Files) as a Windows 64-bit portable zip.
+# Runs on every push to the naps2-apne branch, or manually from the Actions tab.
+name: Build NAPS2-Apne (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - naps2-apne
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Package portable zip
+        run: dotnet run --project NAPS2.Tools -- pkg zip -p win64 --nosign -v
+
+      - name: Collect zip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem NAPS2.Setup/publish -Recurse -Filter *.zip | Select-Object -First 1
+          if (-not $zip) { throw "No zip was produced" }
+          Copy-Item $zip.FullName NAPS2-Apne-win-x64.zip
+          "{0}: {1:N1} MB" -f $zip.Name, ($zip.Length/1MB)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAPS2-Apne-win-x64
+          path: NAPS2-Apne-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish zip to a pre-release (direct download)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "naps2-apne-test"
+          gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag 2>$null
+          gh release create $tag NAPS2-Apne-win-x64.zip `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --prerelease `
+            --title "NAPS2 8.6.0 + sidebar preview + My Files (test build)" `
+            --notes "Test build of NAPS2 8.6.0 with a sidebar preview and a My Files tab. Unzip, then run NAPS2.Portable.exe. Unsigned, so Windows SmartScreen may warn: click 'More info' then 'Run anyway'."
+          exit 0
